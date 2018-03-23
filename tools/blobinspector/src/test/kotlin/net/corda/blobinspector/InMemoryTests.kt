@@ -28,4 +28,18 @@ class InMemoryTests {
             inspectBlob(config, getBytes())
         }
     }
+    @Test
+    fun test3() {
+        data class C (val a: IntArray, val b: Array<String>)
+
+        val a = IntArray(10) { i -> i }
+        val c = C(a, arrayOf("aaa", "bbb", "ccc"))
+
+        val ser = SerializationOutput(factory).serialize(c)
+
+        BlobHandler.make(InMemoryConfig(Mode.inMem).apply { blob = ser; data = true}).apply {
+            inspectBlob(config, getBytes())
+        }
+    }
+
 }

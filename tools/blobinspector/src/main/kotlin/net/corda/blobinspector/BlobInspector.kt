@@ -13,7 +13,7 @@ import java.nio.ByteBuffer
  */
 fun String.debug(config: Config) {
     if (config.verbose) {
-        println (this)
+        println(this)
     }
 }
 
@@ -42,7 +42,7 @@ fun StringBuilder.appendlnIndent(ln: String) {
     if (ln.endsWith("}") || ln.endsWith("]")) {
         g_indent -= 4
     }
-    appendln("${"".padStart(if(g_indenting) g_indent else 0, ' ')}$ln")
+    appendln("${"".padStart(if (g_indenting) g_indent else 0, ' ')}$ln")
     if (ln.endsWith("{") || ln.endsWith("[")) {
         g_indent += 4
     }
@@ -65,7 +65,7 @@ fun StringBuilder.appendIndent(ln: String) {
     }
 }
 
-fun String.simplifyClass() : String {
+fun String.simplifyClass(): String {
     return this.substring(this.lastIndexOf('.') + 1)
 }
 
@@ -75,7 +75,7 @@ fun String.simplifyClass() : String {
  * @param name
  * @param type
  */
-abstract class Property (
+abstract class Property(
         val name: String,
         val type: String) : Stringify
 
@@ -83,11 +83,10 @@ abstract class Property (
  * Derived class of [Property], represents properties of an object that are non compelex, such
  * as any POD type or String
  */
-class PrimProperty (
+class PrimProperty(
         name: String,
         type: String,
-        private val value: String) : Property(name, type)
-{
+        private val value: String) : Property(name, type) {
     override fun toString(): String = "$name : $type : $value"
 
     override fun stringify(sb: StringBuilder) {
@@ -99,11 +98,10 @@ class PrimProperty (
  * Derived class of [Property] that represents a binary blob. Specifically useful because printing
  * a stream of bytes onto the screen isn't very use friendly
  */
-class BinaryProperty (
+class BinaryProperty(
         name: String,
         type: String,
-        val value: ByteArray) : Property(name, type)
-{
+        val value: ByteArray) : Property(name, type) {
     override fun toString(): String = "$name : $type : <<<BINARY BLOB>>>"
 
     override fun stringify(sb: StringBuilder) {
@@ -115,24 +113,21 @@ class BinaryProperty (
  * Derived class of [Property] that represent a list property. List could be either PoD types or
  * composite types.
  */
-class ListProperty (
+class ListProperty(
         name: String,
         type: String,
-        private val values: MutableList<Any> = mutableListOf()) : Property (name, type)
-{
+        private val values: MutableList<Any> = mutableListOf()) : Property(name, type) {
     override fun stringify(sb: StringBuilder) {
         sb.apply {
             if (values.isEmpty()) {
-                appendlnIndent ("$name : $type : [ << EMPTY LIST >> ]")
-            }
-            else if (values.first() is Stringify) {
+                appendlnIndent("$name : $type : [ << EMPTY LIST >> ]")
+            } else if (values.first() is Stringify) {
                 appendlnIndent("$name : $type : [")
                 values.forEach {
                     (it as Stringify).stringify(this)
                 }
                 appendlnIndent("]")
-            }
-            else {
+            } else {
                 appendlnIndent("$name : $type : [")
                 values.forEach {
                     appendlnIndent(it.toString())
@@ -147,11 +142,10 @@ class ListProperty (
  * Derived class of [Property] that represents class properties that are themselves instances of
  * some complex type.
  */
-class InstanceProperty (
+class InstanceProperty(
         name: String,
         type: String,
-        val value: Instance) : Property(name, type)
-{
+        val value: Instance) : Property(name, type) {
     override fun stringify(sb: StringBuilder) {
         sb.appendIndent("$name : ")
         value.stringify(sb)
@@ -161,7 +155,7 @@ class InstanceProperty (
 /**
  * Represents an instance of a composite type.
  */
-class Instance (
+class Instance(
         val name: String,
         val type: String,
         val fields: MutableList<Property> = mutableListOf()) : Stringify {
@@ -181,9 +175,8 @@ class Instance (
  */
 fun inspectComposite(
         config: Config,
-        typeMap : Map<Symbol?, TypeNotation>,
-        obj: DescribedType) : Instance
-    {
+        typeMap: Map<Symbol?, TypeNotation>,
+        obj: DescribedType): Instance {
     if (obj.described !is List<*>) throw MalformedBlob("")
 
     "composite: ${(typeMap[obj.descriptor] as CompositeType).name}".debug(config)
@@ -194,37 +187,37 @@ fun inspectComposite(
 
     (typeMap[obj.descriptor] as CompositeType).fields.zip(obj.described as List<*>).forEach {
         "  field: ${it.first.name}".debug(config)
-        inst.fields.add (
-        if (it.second is DescribedType) {
-            "    - is described".debug(config)
-            val d = inspectDescribed(config, typeMap, it.second as DescribedType)
+        inst.fields.add(
+                if (it.second is DescribedType) {
+                    "    - is described".debug(config)
+                    val d = inspectDescribed(config, typeMap, it.second as DescribedType)
 
-            when (d) {
-                is Instance ->
-                    InstanceProperty(
-                            it.first.name,
-                            it.first.type,
-                            d)
-                is List<*> -> {
-                    "      - List".debug(config)
-                    ListProperty (
-                            it.first.name,
-                            it.first.type,
-                            d as MutableList<Any>)
-                }
-                else -> {
-                    "    skip it".debug(config)
-                    return@forEach
-                }
-            }
+                    when (d) {
+                        is Instance ->
+                            InstanceProperty(
+                                    it.first.name,
+                                    it.first.type,
+                                    d)
+                        is List<*> -> {
+                            "      - List".debug(config)
+                            ListProperty(
+                                    it.first.name,
+                                    it.first.type,
+                                    d as MutableList<Any>)
+                        }
+                        else -> {
+                            "    skip it".debug(config)
+                            return@forEach
+                        }
+                    }
 
-        } else {
-            "    - is prim".debug(config)
-            when (it.first.type) {
-                "binary" -> BinaryProperty(it.first.name, it.first.type, (it.second as Binary).array)
-                else -> PrimProperty(it.first.name, it.first.type, it.second.toString())
-            }
-        })
+                } else {
+                    "    - is prim".debug(config)
+                    when (it.first.type) {
+                        "binary" -> BinaryProperty(it.first.name, it.first.type, (it.second as Binary).array)
+                        else -> PrimProperty(it.first.name, it.first.type, it.second.toString())
+                    }
+                })
     }
 
     return inst
@@ -232,27 +225,25 @@ fun inspectComposite(
 
 fun inspectRestricted(
         config: Config,
-        typeMap : Map<Symbol?, TypeNotation>,
-        obj: DescribedType) : Any
-{
+        typeMap: Map<Symbol?, TypeNotation>,
+        obj: DescribedType): Any {
     return when ((typeMap[obj.descriptor] as RestrictedType).source) {
         "list" -> inspectRestrictedList(config, typeMap, obj)
-        "map"  -> inspectRestrictedMap(config, typeMap, obj)
+        "map" -> inspectRestrictedMap(config, typeMap, obj)
         else -> throw NotImplementedError()
     }
 }
 
 fun inspectRestrictedList(
         config: Config,
-        typeMap : Map<Symbol?, TypeNotation>,
-        obj: DescribedType) : List<Any>
-{
+        typeMap: Map<Symbol?, TypeNotation>,
+        obj: DescribedType): List<Any> {
     if (obj.described !is List<*>) throw MalformedBlob("")
 
     return mutableListOf<Any>().apply {
         (obj.described as List<*>).forEach {
             try {
-                add (inspectDescribed(config, typeMap, it as DescribedType))
+                add(inspectDescribed(config, typeMap, it as DescribedType))
             } catch (e: ClassCastException) {
                 add(it.toString())
             }
@@ -262,18 +253,26 @@ fun inspectRestrictedList(
 
 fun inspectRestrictedMap(
         config: Config,
-        typeMap : Map<Symbol?, TypeNotation>,
-        obj: DescribedType) : Instance
-{
+        typeMap: Map<Symbol?, TypeNotation>,
+        obj: DescribedType): Instance {
     throw NotImplementedError()
 }
 
 
+/**
+ * Every element of the blob stream will be a ProtonJ [DescribedType]. When inspecting the blob stream
+ * the two custom Corda types we're interested in are [CompositeType]'s, representing the instance of
+ * some object (class), and [RestrictedType]'s, representing containers and enumerations.
+ *
+ * @param config The configuration object that controls the behaviour of the BlobInspector
+ * @param typeMap
+ * @param obj
+ *
+ */
 fun inspectDescribed(
         config: Config,
-        typeMap : Map<Symbol?, TypeNotation>,
-        obj: DescribedType) : Any
-{
+        typeMap: Map<Symbol?, TypeNotation>,
+        obj: DescribedType): Any {
     "${obj.descriptor} in typeMap? = ${obj.descriptor in typeMap}".debug(config)
 
     return when (typeMap[obj.descriptor]) {
@@ -296,15 +295,15 @@ fun inspectBlob(config: Config, blob: ByteArray) {
     // This sucks, but that's because the main code doesn't deal well with the multiple versions so for now
     // we're going to just bodge around that
 
-    val bytes = ByteSequence.of (blob)
+    val bytes = ByteSequence.of(blob)
 
     val headerSize = AmqpHeaderV1_0.size
-    val headers = listOf (ByteSequence.of(AmqpHeaderV1_0.bytes))
+    val headers = listOf(ByteSequence.of(AmqpHeaderV1_0.bytes))
 
     val blobHeader = bytes.take(headerSize)
 
     if (blobHeader !in headers) {
-        throw MalformedBlob ("Blob is not a Corda AMQP serialised object graph")
+        throw MalformedBlob("Blob is not a Corda AMQP serialised object graph")
     }
 
 
@@ -312,7 +311,7 @@ fun inspectBlob(config: Config, blob: ByteArray) {
     val size = data.decode(ByteBuffer.wrap(bytes.bytes, bytes.offset + headerSize, bytes.size - headerSize))
 
     if (size.toInt() != blob.size - headerSize) {
-        throw MalformedBlob ("Blob size does not match internal size")
+        throw MalformedBlob("Blob size does not match internal size")
     }
 
     val e = Envelope.get(data)
@@ -325,13 +324,13 @@ fun inspectBlob(config: Config, blob: ByteArray) {
         println(e.transformsSchema)
     }
 
-    val typeMap = e.schema.types.associateBy( {it.descriptor.name }, { it })
+    val typeMap = e.schema.types.associateBy({ it.descriptor.name }, { it })
 
     if (config.data) {
         val inspected = inspectDescribed(config, typeMap, e.obj as DescribedType)
 
 
-        println ("\n${StringBuilder().apply { (inspected as Instance).stringify(this) }}")
+        println("\n${StringBuilder().apply { (inspected as Instance).stringify(this) }}")
 
         (inspected as Instance).fields.find { it.type == "net.corda.core.serialization.SerializedBytes<?>" }?.let {
             "Found field of SerializedBytes".debug(config)
