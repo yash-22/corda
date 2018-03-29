@@ -1,5 +1,6 @@
 package net.corda.blobinspector
 
+import net.corda.core.crypto.SecureHash
 import net.corda.core.utilities.ByteSequence
 import net.corda.nodeapi.internal.serialization.amqp.*
 import org.apache.qpid.proton.amqp.Binary
@@ -66,7 +67,13 @@ fun StringBuilder.appendIndent(ln: String) {
 }
 
 fun String.simplifyClass(): String {
-    return this.substring(this.lastIndexOf('.') + 1)
+    return if (this.endsWith('>')) {
+        val thing = this.indexOf('<')
+        "${this.substring(0, thing)}"
+    }
+    else {
+        this.substring(this.lastIndexOf('.') + 1)
+    }
 }
 
 /**
@@ -179,7 +186,8 @@ fun inspectComposite(
         obj: DescribedType): Instance {
     if (obj.described !is List<*>) throw MalformedBlob("")
 
-    "composite: ${(typeMap[obj.descriptor] as CompositeType).name}".debug(config)
+    val name = (typeMap[obj.descriptor] as CompositeType).name
+    "composite: $name".debug(config)
 
     val inst = Instance(
             typeMap[obj.descriptor]?.name ?: "",
@@ -214,7 +222,14 @@ fun inspectComposite(
                 } else {
                     "    - is prim".debug(config)
                     when (it.first.type) {
-                        "binary" -> BinaryProperty(it.first.name, it.first.type, (it.second as Binary).array)
+                        "binary" -> {
+                            if (name == "net.corda.core.crypto.SecureHash\$SHA256") {
+                                PrimProperty(it.first.name, it.first.type,
+                                        SecureHash.SHA256((it.second as Binary).array).toString())
+                            } else {
+                                BinaryProperty(it.first.name, it.first.type, (it.second as Binary).array)
+                            }
+                        }
                         else -> PrimProperty(it.first.name, it.first.type, it.second.toString())
                     }
                 })
@@ -329,10 +344,12 @@ fun inspectBlob(config: Config, blob: ByteArray) {
     if (config.data) {
         val inspected = inspectDescribed(config, typeMap, e.obj as DescribedType)
 
-
         println("\n${StringBuilder().apply { (inspected as Instance).stringify(this) }}")
 
-        (inspected as Instance).fields.find { it.type == "net.corda.core.serialization.SerializedBytes<?>" }?.let {
+        (inspected as Instance).fields.find {
+            it.type == "net.corda.core.serialization.SerializedBytes<?>"
+            || it.type == "net.corda.core.serialization.SerializedBytes<net.corda.nodeapi.internal.network.NetworkMap>"
+        }?.let {
             "Found field of SerializedBytes".debug(config)
             (it as InstanceProperty).value.fields.find { it.name == "bytes" }?.let { raw ->
                 inspectBlob(config, (raw as BinaryProperty).value)

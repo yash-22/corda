@@ -28,6 +28,7 @@ class InMemoryTests {
             inspectBlob(config, getBytes())
         }
     }
+
     @Test
     fun test3() {
         data class C (val a: IntArray, val b: Array<String>)
