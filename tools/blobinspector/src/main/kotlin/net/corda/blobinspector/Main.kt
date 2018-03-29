@@ -73,8 +73,10 @@ fun loadModeSpecificOptions(config: Config, args: Array<String>) {
  * Executable entry point
  */
 fun main(args: Array<String>) {
-    getMode(args).apply {
-        loadModeSpecificOptions(this, args)
-        BlobHandler.make(this)
+    getMode(args).let { mode ->
+        loadModeSpecificOptions(mode, args)
+        BlobHandler.make(mode)
+    }.apply {
+        inspectBlob(config, getBytes())
     }
 }
