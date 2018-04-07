@@ -66,13 +66,35 @@ fun StringBuilder.appendIndent(ln: String) {
     }
 }
 
+/**
+ * Makes classnames easier to read by stripping off the package names from the class and separating nested
+ * classes
+ *
+ * For example:
+ *
+ * net.corda.blobinspector.Class1<net.corda.blobinspector.Class2>
+ * Class1 <Class2>
+ *
+ * net.corda.blobinspector.Class1<net.corda.blobinspector.Class2, net.corda.blobinspector.Class3>
+ * Class1 <Class2, Class3>
+ *
+ * net.corda.blobinspector.Class1<net.corda.blobinspector.Class2<net.corda.blobinspector.Class3>>
+ * Class1 <Class2 <Class3>>
+ *
+ * net.corda.blobinspector.Class1<net.corda.blobinspector.Class2<net.corda.blobinspector.Class3>>
+ * Class1 :: C <Class2 <Class3>>
+ */
 fun String.simplifyClass(): String {
+
     return if (this.endsWith('>')) {
-        val thing = this.indexOf('<')
-        "${this.substring(0, thing)}"
+        val templateStart = this.indexOf('<')
+        val clazz = (this.substring(0, templateStart))
+        val params = this.substring(templateStart+1, this.length-1).split(',').map { it.simplifyClass() }.joinToString()
+
+        "${clazz.simplifyClass()} <$params>"
     }
     else {
-        this.substring(this.lastIndexOf('.') + 1)
+        substring(this.lastIndexOf('.') + 1).replace("$", " :: ")
     }
 }
 
@@ -347,8 +369,7 @@ fun inspectBlob(config: Config, blob: ByteArray) {
         println("\n${StringBuilder().apply { (inspected as Instance).stringify(this) }}")
 
         (inspected as Instance).fields.find {
-            it.type == "net.corda.core.serialization.SerializedBytes<?>"
-            || it.type == "net.corda.core.serialization.SerializedBytes<net.corda.nodeapi.internal.network.NetworkMap>"
+            it.type.startsWith("net.corda.core.serialization.SerializedBytes<")
         }?.let {
             "Found field of SerializedBytes".debug(config)
             (it as InstanceProperty).value.fields.find { it.name == "bytes" }?.let { raw ->
