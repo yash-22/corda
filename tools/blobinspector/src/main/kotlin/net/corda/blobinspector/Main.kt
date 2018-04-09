@@ -10,8 +10,6 @@ private fun modeOption() = Option("m", "mode", true, "mode, file is the default"
     isRequired = false
 }
 
-
-
 /**
  *
  * Parse the command line arguments looking for the main mode into which the application is

@@ -22,49 +22,10 @@ fun String.debug(config: Config) {
  *
  */
 interface Stringify {
-    fun stringify(sb: StringBuilder)
+    fun stringify(sb: IndentingStringBuilder)
 }
 
-/**
- * Used by the [StringBuilder] extension method to track the current indentation
- * level for pretty printing
- */
-var g_indent = 0
 
-/**
- *
- */
-var g_indenting = true
-
-/**
- * Adds a line and adjust the indentation depending upon whether the
- */
-fun StringBuilder.appendlnIndent(ln: String) {
-    if (ln.endsWith("}") || ln.endsWith("]")) {
-        g_indent -= 4
-    }
-    appendln("${"".padStart(if (g_indenting) g_indent else 0, ' ')}$ln")
-    if (ln.endsWith("{") || ln.endsWith("[")) {
-        g_indent += 4
-    }
-
-    g_indenting = true
-}
-
-/**
- * Adds a line and adjust the indentation depending upon whether the
- */
-fun StringBuilder.appendIndent(ln: String) {
-    g_indenting = false
-
-    if (ln.endsWith("}") || ln.endsWith("]")) {
-        g_indent -= 4
-    }
-    append("${"".padStart(g_indent, ' ')}$ln")
-    if (ln.endsWith("{") || ln.endsWith("[")) {
-        g_indent += 4
-    }
-}
 
 /**
  * Makes classnames easier to read by stripping off the package names from the class and separating nested
@@ -118,8 +79,8 @@ class PrimProperty(
         private val value: String) : Property(name, type) {
     override fun toString(): String = "$name : $type : $value"
 
-    override fun stringify(sb: StringBuilder) {
-        sb.appendlnIndent("$name : $type : $value")
+    override fun stringify(sb: IndentingStringBuilder) {
+        sb.appendln("$name : $type : $value")
     }
 }
 
@@ -133,8 +94,8 @@ class BinaryProperty(
         val value: ByteArray) : Property(name, type) {
     override fun toString(): String = "$name : $type : <<<BINARY BLOB>>>"
 
-    override fun stringify(sb: StringBuilder) {
-        sb.appendlnIndent("$name : $type : <<<BINARY BLOB>>>")
+    override fun stringify(sb: IndentingStringBuilder) {
+        sb.appendln("$name : $type : <<<BINARY BLOB>>>")
     }
 }
 
@@ -146,22 +107,22 @@ class ListProperty(
         name: String,
         type: String,
         private val values: MutableList<Any> = mutableListOf()) : Property(name, type) {
-    override fun stringify(sb: StringBuilder) {
+    override fun stringify(sb: IndentingStringBuilder) {
         sb.apply {
             if (values.isEmpty()) {
-                appendlnIndent("$name : $type : [ << EMPTY LIST >> ]")
+                appendln("$name : $type : [ << EMPTY LIST >> ]")
             } else if (values.first() is Stringify) {
-                appendlnIndent("$name : $type : [")
+                appendln("$name : $type : [")
                 values.forEach {
                     (it as Stringify).stringify(this)
                 }
-                appendlnIndent("]")
+                appendln("]")
             } else {
-                appendlnIndent("$name : $type : [")
+                appendln("$name : $type : [")
                 values.forEach {
-                    appendlnIndent(it.toString())
+                    appendln(it.toString())
                 }
-                appendlnIndent("]")
+                appendln("]")
             }
         }
     }
@@ -175,8 +136,8 @@ class InstanceProperty(
         name: String,
         type: String,
         val value: Instance) : Property(name, type) {
-    override fun stringify(sb: StringBuilder) {
-        sb.appendIndent("$name : ")
+    override fun stringify(sb: IndentingStringBuilder) {
+        sb.append("$name : ")
         value.stringify(sb)
     }
 }
@@ -188,13 +149,13 @@ class Instance(
         val name: String,
         val type: String,
         val fields: MutableList<Property> = mutableListOf()) : Stringify {
-    override fun stringify(sb: StringBuilder) {
+    override fun stringify(sb: IndentingStringBuilder) {
         sb.apply {
-            appendlnIndent("${name.simplifyClass()} : {")
+            appendln("${name.simplifyClass()} : {")
             fields.forEach {
                 it.stringify(this)
             }
-            appendlnIndent("}")
+            appendln("}")
         }
     }
 }
@@ -244,9 +205,13 @@ fun inspectComposite(
                 } else {
                     "    - is prim".debug(config)
                     when (it.first.type) {
+                        // Note, as in the case of SHA256 we can treat particular binary types
+                        // as different properties with a little coersian
                         "binary" -> {
                             if (name == "net.corda.core.crypto.SecureHash\$SHA256") {
-                                PrimProperty(it.first.name, it.first.type,
+                                PrimProperty(
+                                        it.first.name,
+                                        it.first.type,
                                         SecureHash.SHA256((it.second as Binary).array).toString())
                             } else {
                                 BinaryProperty(it.first.name, it.first.type, (it.second as Binary).array)
@@ -304,7 +269,6 @@ fun inspectRestrictedMap(
  * @param config The configuration object that controls the behaviour of the BlobInspector
  * @param typeMap
  * @param obj
- *
  */
 fun inspectDescribed(
         config: Config,
@@ -366,7 +330,7 @@ fun inspectBlob(config: Config, blob: ByteArray) {
     if (config.data) {
         val inspected = inspectDescribed(config, typeMap, e.obj as DescribedType)
 
-        println("\n${StringBuilder().apply { (inspected as Instance).stringify(this) }}")
+        println("\n${IndentingStringBuilder().apply { (inspected as Instance).stringify(this) }}")
 
         (inspected as Instance).fields.find {
             it.type.startsWith("net.corda.core.serialization.SerializedBytes<")

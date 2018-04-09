@@ -3,6 +3,9 @@ package net.corda.blobinspector
 import java.io.File
 import java.net.URL
 
+/**
+ *
+ */
 class FileBlobHandler(config_: Config) : BlobHandler(config_) {
     private val path = File(URL((config_ as FileConfig).file).toURI())
 

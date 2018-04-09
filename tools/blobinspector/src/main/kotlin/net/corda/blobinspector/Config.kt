@@ -9,9 +9,9 @@ import org.apache.commons.cli.Options
  * Enumeration of the modes in which the blob inspector can be run.
  *
  * @property make lambda function that takes no parameters and returns a specific instance of the configuration
- * opbject for that mode.
+ * object for that mode.
  *
- * @property options A lambda functio that takes no parameters and returns am [Options] instance that define
+ * @property options A lambda function that takes no parameters and returns an [Options] instance that define
  * the command line flags related to this mode. For example ``file`` mode would have an option to pass in
  * the name of the file to read.
  *
