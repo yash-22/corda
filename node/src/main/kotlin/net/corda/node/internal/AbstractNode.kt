@@ -318,6 +318,7 @@ abstract class AbstractNode(val configuration: NodeConfiguration,
         networkMapClient = configuration.networkServices?.let { NetworkMapClient(it.networkMapURL, identityService.trustRoot) }
         val networkParameteresReader = NetworkParametersReader(identityService.trustRoot, networkMapClient, configuration.baseDirectory)
         val networkParameters = networkParameteresReader.networkParameters
+        platformVersionInfo = PlatformVersionInfo(networkParameters.minimumPlatformVersion)
         check(networkParameters.minimumPlatformVersion <= versionInfo.platformVersion) {
             "Node's platform version is lower than network's required minimumPlatformVersion"
         }

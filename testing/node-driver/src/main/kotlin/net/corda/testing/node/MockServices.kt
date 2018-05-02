@@ -131,6 +131,11 @@ open class MockServices private constructor(
         private val mockStateMachineRecordedTransactionMappingStorage = MockStateMachineRecordedTransactionMappingStorage()
     }
 
+    init {
+        // Set the global for network minimum platform version.
+        platformVersionInfo = PlatformVersionInfo(networkParameters.minimumPlatformVersion)
+    }
+
     private class MockStateMachineRecordedTransactionMappingStorage : StateMachineRecordedTransactionMappingStorage {
         override fun addMapping(stateMachineRunId: StateMachineRunId, transactionId: SecureHash) {
             throw UnsupportedOperationException()

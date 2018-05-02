@@ -105,3 +105,28 @@ data class NetworkParameters(
 @KeepForDJVM
 @CordaSerializable
 data class NotaryInfo(val identity: Party, val validating: Boolean)
+
+/**
+ * Used for restricting the use of features which require a platform version greater than the current minimum platform
+ * version for the network.
+ *
+ * @param requiredMinimumVersion the minimum platform version which this feature requires.
+ * @param block the code block which is dependent on a potentially greater minimum platform version than the network's.
+ */
+fun <T : Any> checkVersion(requiredMinimumVersion: Int, block: () -> T): T {
+    val minimumPlatformVersion = platformVersionInfo.minimumPlatformVersion
+    return if (requiredMinimumVersion > minimumPlatformVersion) {
+        throw UncheckedVersionException("This feature is disabled until network minimum platform version is " +
+                "increased from $minimumPlatformVersion to $requiredMinimumVersion.")
+    } else {
+        block()
+    }
+}
+
+/** For use by the [checkVersion] function. */
+data class PlatformVersionInfo(val minimumPlatformVersion: Int)
+
+/** This variable is set in [AbstractNode] during node startup. */
+lateinit var platformVersionInfo: PlatformVersionInfo
+
+class UncheckedVersionException(message: String) : RuntimeException(message)
