@@ -55,6 +55,27 @@ class InMemoryTests {
     }
 
     @Test
+    fun test4b() {
+        data class Elem(val e1: Long, val e2: String)
+        data class Wrapper (val name: String, val elementes: List<List<Elem>>)
+
+        inspect (SerializationOutput(factory).serialize(
+                Wrapper("Outer Class",
+                        listOf (
+                                listOf(
+                                        Elem(1L, "First element"),
+                                        Elem(2L, "Second element"),
+                                        Elem(3L, "Third element")
+                                ),
+                                listOf(
+                                        Elem(4L, "Fourth element"),
+                                        Elem(5L, "Fifth element"),
+                                        Elem(6L, "Sixth element")
+                                )
+                        ))))
+    }
+
+    @Test
     fun test5() {
         data class C (val a: Map<String, String>)
 

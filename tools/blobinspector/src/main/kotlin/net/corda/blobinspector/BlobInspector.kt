@@ -25,8 +25,6 @@ interface Stringify {
     fun stringify(sb: IndentingStringBuilder)
 }
 
-
-
 /**
  * Makes classnames easier to read by stripping off the package names from the class and separating nested
  * classes
@@ -128,6 +126,28 @@ class ListProperty(
     }
 }
 
+class MapProperty(
+        name: String,
+        type: String,
+        private val map: MutableMap<*, *>
+) : Property(name, type) {
+    override fun stringify(sb: IndentingStringBuilder) {
+        if (map.isEmpty()) {
+            sb.appendln("$name : $type : { << EMPTY MAP >> }")
+            return
+        }
+
+        sb.apply {
+            appendln("$name : $type : {")
+            map.forEach {
+                (it.key as Stringify).stringify(this)
+                (it.value as Stringify).stringify(this)
+            }
+            appendln("}")
+        }
+    }
+}
+
 /**
  * Derived class of [Property] that represents class properties that are themselves instances of
  * some complex type.
@@ -196,6 +216,12 @@ fun inspectComposite(
                                     it.first.type,
                                     d as MutableList<Any>)
                         }
+                        is Map<*, *> -> {
+                            MapProperty(
+                                    it.first.name,
+                                    it.first.type,
+                                    d as MutableMap<*, *>)
+                        }
                         else -> {
                             "    skip it".debug(config)
                             return@forEach
@@ -206,7 +232,7 @@ fun inspectComposite(
                     "    - is prim".debug(config)
                     when (it.first.type) {
                         // Note, as in the case of SHA256 we can treat particular binary types
-                        // as different properties with a little coersian
+                        // as different properties with a little coercion
                         "binary" -> {
                             if (name == "net.corda.core.crypto.SecureHash\$SHA256") {
                                 PrimProperty(
@@ -236,18 +262,20 @@ fun inspectRestricted(
     }
 }
 
+
 fun inspectRestrictedList(
         config: Config,
         typeMap: Map<Symbol?, TypeNotation>,
-        obj: DescribedType): List<Any> {
+        obj: DescribedType
+) : List<Any> {
     if (obj.described !is List<*>) throw MalformedBlob("")
 
     return mutableListOf<Any>().apply {
         (obj.described as List<*>).forEach {
-            try {
-                add(inspectDescribed(config, typeMap, it as DescribedType))
-            } catch (e: ClassCastException) {
-                add(it.toString())
+            when (it) {
+                is DescribedType -> add(inspectDescribed(config, typeMap, it))
+                is RestrictedType -> add(inspectRestricted(config, typeMap, it))
+                else -> add (it.toString())
             }
         }
     }
@@ -256,8 +284,27 @@ fun inspectRestrictedList(
 fun inspectRestrictedMap(
         config: Config,
         typeMap: Map<Symbol?, TypeNotation>,
-        obj: DescribedType): Instance {
-    throw NotImplementedError()
+        obj: DescribedType
+) : Map<Any, Any> {
+    if (obj.described !is Map<*,*>) throw MalformedBlob("")
+
+    return mutableMapOf<Any, Any>().apply {
+        (obj.described as Map<*, *>).forEach {
+            val key = when (it.key) {
+                is DescribedType -> inspectDescribed(config, typeMap, it.key as DescribedType)
+                is RestrictedType -> inspectRestricted(config, typeMap, it.key as RestrictedType)
+                else -> it.key.toString()
+            }
+
+            val value = when (it.value) {
+                is DescribedType -> inspectDescribed(config, typeMap, it.value as DescribedType)
+                is RestrictedType -> inspectRestricted(config, typeMap, it.value as RestrictedType)
+                else -> it.value.toString()
+            }
+
+            this[key] = value
+        }
+    }
 }
 
 

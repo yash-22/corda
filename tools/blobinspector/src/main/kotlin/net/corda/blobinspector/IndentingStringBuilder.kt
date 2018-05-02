@@ -12,13 +12,13 @@ class IndentingStringBuilder(s : String = "", private val offset : Int = 4) {
     private var indent = 0
 
     private fun wrap(ln: String, appender: (String) -> Unit) {
-        if (ln.endsWith("}") || ln.endsWith("]")) {
+        if ((ln.endsWith("}") || ln.endsWith("]")) && indent > 0 && ln.length == 1) {
             indent -= offset
         }
 
         appender(ln)
 
-        if (ln.endsWith("{") || ln.endsWith("[")) {
+        if (ln.endsWith("{") || ln.endsWith("[")){
             indent += offset
         }
     }
