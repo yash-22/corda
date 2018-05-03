@@ -194,8 +194,8 @@ data class LedgerTransaction @JvmOverloads constructor(
         val statesAndEncumbrance = outputs.withIndex().filter { it.value.encumbrance != null }.map { Pair(it.index, it.value.encumbrance) }
         val withEncumbrance = statesAndEncumbrance.map { it.first }.toSet() // We are sure this contains distinct indices.
         val beingEncumbered = statesAndEncumbrance.map { it.second }
-        check(!beingEncumbered.hasDuplicates()) { "The bi-directionality property of state-encumbrance is not satisfied. Duplicate encumbrance references detected" }
-        check(withEncumbrance.size == beingEncumbered.size && withEncumbrance.containsAll(beingEncumbered)) { "The bi-directionality property of state-encumbrance is not satisfied. Orphaned encumbered states detected" }
+        if (beingEncumbered.hasDuplicates() || withEncumbrance.size != beingEncumbered.size || !withEncumbrance.containsAll(beingEncumbered))
+            throw TransactionVerificationException.TransactionBiDirectionalEncumbranceException(id)
     }
 
     /**
