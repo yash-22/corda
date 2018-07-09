@@ -48,6 +48,7 @@ open class TransactionBuilder @JvmOverloads constructor(
         protected val references: MutableList<StateRef> = arrayListOf()
 ) {
     private val inputsWithTransactionState = arrayListOf<TransactionState<ContractState>>()
+    private val referencesWithTransactionState = arrayListOf<TransactionState<ContractState>>()
 
     /**
      * Creates a copy of the builder.
@@ -150,13 +151,19 @@ open class TransactionBuilder @JvmOverloads constructor(
 
     private fun checkNotary(stateAndRef: StateAndRef<*>) {
         val notary = stateAndRef.state.notary
-        require(notary == this.notary) { "Input state requires notary \"$notary\" which does not match the transaction notary \"${this.notary}\"." }
+        require(notary == this.notary) {
+            "Input state requires notary \"$notary\" which does not match the transaction notary \"${this.notary}\"."
+        }
     }
 
     private fun checkForInputsAndReferencesOverlap() {
         val intersection = inputs intersect references
-        require(intersection.isEmpty()) { "A StateRef cannot be both an input and a reference input in the same transaction." }
+        require(intersection.isEmpty()) {
+            "A StateRef cannot be both an input and a reference input in the same transaction."
+        }
     }
+
+    private fun checkReferencesUseSameNotary() = referencesWithTransactionState.map { it.notary }.toSet().size == 1
 
     /**
      * Adds a reference input [StateRef] to the transaction.
@@ -167,6 +174,24 @@ open class TransactionBuilder @JvmOverloads constructor(
     open fun addReferenceState(referencedStateAndRef: ReferencedStateAndRef<*>): TransactionBuilder {
         return checkVersion(requiredMinimumVersion = 4) {
             val stateAndRef = referencedStateAndRef.stateAndRef
+            referencesWithTransactionState.add(stateAndRef.state)
+
+            // It is likely the case that users of reference states do not have permission to change the notary assigned
+            // to a reference state. Even if users _did_ have this permission the result would likely be a bunch of
+            // notary change races. As such, if a reference state is added to a transaction which is assigned to a
+            // different notary to the input and output states then all those inputs and outputs must be moved to the
+            // notary which the reference state uses.
+            //
+            // If two or more reference states assigned to different notaries are added to a transaction then it follows
+            // that this transaction likely _cannot_ be committed to the ledger as it unlikely that the party using the
+            // reference state can change the assigned notary for one of the reference states.
+            //
+            // As such, if reference states assigned to multiple different notaries are added to a transaction builder
+            // then the check below will fail.
+            check(checkReferencesUseSameNotary()) {
+                "Transactions with reference states using multiple different notaries are unsupported."
+            }
+
             checkNotary(stateAndRef)
             references.add(stateAndRef.ref)
             checkForInputsAndReferencesOverlap()
@@ -178,7 +203,6 @@ open class TransactionBuilder @JvmOverloads constructor(
     open fun addInputState(stateAndRef: StateAndRef<*>): TransactionBuilder {
         checkNotary(stateAndRef)
         inputs.add(stateAndRef.ref)
-        checkForInputsAndReferencesOverlap()
         inputsWithTransactionState.add(stateAndRef.state)
         return this
     }
@@ -196,14 +220,24 @@ open class TransactionBuilder @JvmOverloads constructor(
     }
 
     @JvmOverloads
-    fun addOutputState(state: ContractState, contract: ContractClassName, notary: Party, encumbrance: Int? = null, constraint: AttachmentConstraint = AutomaticHashConstraint): TransactionBuilder {
+    fun addOutputState(
+            state: ContractState,
+            contract: ContractClassName,
+            notary: Party, encumbrance: Int? = null,
+            constraint: AttachmentConstraint = AutomaticHashConstraint
+    ): TransactionBuilder {
         return addOutputState(TransactionState(state, contract, notary, encumbrance, constraint))
     }
 
     /** A default notary must be specified during builder construction to use this method */
     @JvmOverloads
-    fun addOutputState(state: ContractState, contract: ContractClassName, constraint: AttachmentConstraint = AutomaticHashConstraint): TransactionBuilder {
-        checkNotNull(notary) { "Need to specify a notary for the state, or set a default one on TransactionBuilder initialisation" }
+    fun addOutputState(
+            state: ContractState, contract: ContractClassName,
+            constraint: AttachmentConstraint = AutomaticHashConstraint
+    ): TransactionBuilder {
+        checkNotNull(notary) {
+            "Need to specify a notary for the state, or set a default one on TransactionBuilder initialisation"
+        }
         addOutputState(state, contract, notary!!, constraint = constraint)
         return this
     }
@@ -214,7 +248,10 @@ open class TransactionBuilder @JvmOverloads constructor(
         return this
     }
 
-    /** Adds a [Command] to the transaction, specified by the encapsulated [CommandData] object and required list of signing [PublicKey]s. */
+    /**
+     * Adds a [Command] to the transaction, specified by the encapsulated [CommandData] object and required list of
+     * signing [PublicKey]s.
+     */
     fun addCommand(data: CommandData, vararg keys: PublicKey) = addCommand(Command(data, listOf(*keys)))
     fun addCommand(data: CommandData, keys: List<PublicKey>) = addCommand(Command(data, keys))
 

@@ -31,6 +31,7 @@ abstract class BaseTransaction : NamedByHash {
     protected open fun checkBaseInvariants() {
         checkNotarySetIfInputsPresent()
         checkNoDuplicateInputs()
+        checkForInputsAndReferencesOverlap()
     }
 
     private fun checkNotarySetIfInputsPresent() {
@@ -42,6 +43,13 @@ abstract class BaseTransaction : NamedByHash {
     private fun checkNoDuplicateInputs() {
         check(inputs.size == inputs.toSet().size) { "Duplicate input states detected" }
         check(references.size == references.toSet().size) { "Duplicate reference states detected" }
+    }
+
+    private fun checkForInputsAndReferencesOverlap() {
+        val intersection = inputs intersect references
+        require(intersection.isEmpty()) {
+            "A StateRef cannot be both an input and a reference input in the same transaction."
+        }
     }
 
     /**
