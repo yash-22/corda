@@ -2,7 +2,6 @@ package net.corda.core.flows
 
 import co.paralleluniverse.fibers.Suspendable
 import net.corda.core.contracts.StateRef
-import net.corda.core.internal.executeAsync
 
 /**
  * Given a flow which uses [ReferenceState]s, the [WithReferencedStatesFlow] will execute the the flow as a subFlow.
@@ -51,7 +50,7 @@ class WithReferencedStatesFlow<T : Any>(val flowLogic: FlowLogic<T>) : FlowLogic
         return when (processedResult) {
             is FlowResult.Success<*> -> processedResult.value as T  // Will always be T.
             is FlowResult.Conflict -> {
-                executeAsync(WaitForStatesToUpdate(processedResult.stateRefs, serviceHub))
+                waitForStatesToUpdate(processedResult.stateRefs)
                 // The flow has now woken up because the conflicting
                 // reference states have been updated.
                 subFlow(flowLogic)
