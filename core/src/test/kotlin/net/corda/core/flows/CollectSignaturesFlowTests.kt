@@ -13,50 +13,49 @@ import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.utilities.getOrThrow
 import net.corda.node.internal.StartedNode
 import net.corda.testing.contracts.DummyContract
-import net.corda.testing.core.ALICE_NAME
-import net.corda.testing.core.BOB_NAME
-import net.corda.testing.core.CHARLIE_NAME
-import net.corda.testing.core.TestIdentity
-import net.corda.testing.core.singleIdentity
+import net.corda.testing.core.*
 import net.corda.testing.internal.rigorousMock
 import net.corda.testing.node.MockServices
 import net.corda.testing.node.internal.InternalMockNetwork
 import net.corda.testing.node.internal.InternalMockNetwork.MockNode
 import net.corda.testing.node.internal.startFlow
-import org.junit.After
-import org.junit.Before
+import org.junit.AfterClass
+import org.junit.BeforeClass
 import org.junit.Test
 import kotlin.test.assertFailsWith
 
 class CollectSignaturesFlowTests {
+
     companion object {
-        private val miniCorp = TestIdentity(CordaX500Name("MiniCorp", "London", "GB"))
-    }
+        val miniCorp = TestIdentity(CordaX500Name("MiniCorp", "London", "GB"))
 
-    private lateinit var mockNet: InternalMockNetwork
-    private lateinit var aliceNode: StartedNode<MockNode>
-    private lateinit var bobNode: StartedNode<MockNode>
-    private lateinit var charlieNode: StartedNode<MockNode>
-    private lateinit var alice: Party
-    private lateinit var bob: Party
-    private lateinit var charlie: Party
-    private lateinit var notary: Party
+        lateinit var mockNet: InternalMockNetwork
+        lateinit var aliceNode: StartedNode<MockNode>
+        lateinit var bobNode: StartedNode<MockNode>
+        lateinit var charlieNode: StartedNode<MockNode>
+        lateinit var alice: Party
+        lateinit var bob: Party
+        lateinit var charlie: Party
+        lateinit var notary: Party
 
-    @Before
-    fun setup() {
-        mockNet = InternalMockNetwork(cordappPackages = listOf("net.corda.testing.contracts", "net.corda.core.flows"))
-        aliceNode = mockNet.createPartyNode(ALICE_NAME)
-        bobNode = mockNet.createPartyNode(BOB_NAME)
-        charlieNode = mockNet.createPartyNode(CHARLIE_NAME)
-        alice = aliceNode.info.singleIdentity()
-        bob = bobNode.info.singleIdentity()
-        charlie = charlieNode.info.singleIdentity()
-        notary = mockNet.defaultNotaryIdentity
-    }
+        @BeforeClass
+        @JvmStatic
+        fun setUpClass() {
+            mockNet = InternalMockNetwork(cordappPackages = listOf("net.corda.testing.contracts", "net.corda.core.flows"))
+            aliceNode = mockNet.createPartyNode(ALICE_NAME)
+            bobNode = mockNet.createPartyNode(BOB_NAME)
+            charlieNode = mockNet.createPartyNode(CHARLIE_NAME)
+            alice = aliceNode.info.singleIdentity()
+            bob = bobNode.info.singleIdentity()
+            charlie = charlieNode.info.singleIdentity()
+            notary = mockNet.defaultNotaryIdentity
+        }
 
-    @After
-    fun tearDown() {
-        mockNet.stopNodes()
+        @AfterClass
+        @JvmStatic
+        fun stop() {
+            mockNet.stopNodes()
+        }
     }
 
     // With this flow, the initiator starts the "CollectTransactionFlow". It is then the responders responsibility to

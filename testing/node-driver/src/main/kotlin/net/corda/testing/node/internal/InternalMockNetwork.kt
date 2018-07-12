@@ -385,7 +385,10 @@ open class InternalMockNetwork(private val cordappPackages: List<String>,
         val node = nodeFactory(MockNodeArgs(config, this, id, parameters.entropyRoot, parameters.version, parameters.extraCordappPackages))
         _nodes += node
         if (start) {
+            val startNode = System.currentTimeMillis()
             node.start()
+            val startedNode = System.currentTimeMillis()
+            println("*** TIME TO START NODE: ${startedNode - startNode}")
         }
         return node
     }
@@ -443,7 +446,12 @@ open class InternalMockNetwork(private val cordappPackages: List<String>,
 
     fun startNodes() {
         require(nodes.isNotEmpty())
-        nodes.forEach { it.started ?: it.start() }
+        nodes.forEach {
+            val startNode = System.currentTimeMillis()
+            it.started ?: it.start()
+            val startedNode = System.currentTimeMillis()
+            println("TIME TO START NODE: ${startedNode - startNode}")
+        }
     }
 
     fun stopNodes() {

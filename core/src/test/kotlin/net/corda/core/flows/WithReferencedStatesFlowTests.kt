@@ -12,13 +12,15 @@ import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.utilities.getOrThrow
 import net.corda.node.VersionInfo
+import net.corda.node.internal.StartedNode
 import net.corda.testing.common.internal.testNetworkParameters
 import net.corda.testing.contracts.DummyContract
 import net.corda.testing.contracts.DummyState
 import net.corda.testing.node.internal.InternalMockNetwork
 import net.corda.testing.node.internal.InternalMockNodeParameters
 import net.corda.testing.node.internal.startFlow
-import org.junit.After
+import org.junit.AfterClass
+import org.junit.BeforeClass
 import org.junit.Test
 import kotlin.test.assertEquals
 
@@ -112,23 +114,32 @@ internal class UseRefState(val linearId: UniqueIdentifier) : FlowLogic<SignedTra
     }
 }
 
-
 class WithReferencedStatesFlowTests {
-    private val mockNet = InternalMockNetwork(
-            cordappPackages = listOf("net.corda.core.flows", "net.corda.testing.contracts"),
-            threadPerNode = true,
-            networkParameters = testNetworkParameters(minimumPlatformVersion = 4)
-    )
 
-    private val nodes = (0..1).map {
-        mockNet.createNode(
-                parameters = InternalMockNodeParameters(version = VersionInfo(4, "Blah", "Blah", "Blah"))
-        )
-    }
+    companion object {
+        lateinit var mockNet: InternalMockNetwork
+        lateinit var nodes: List<StartedNode<InternalMockNetwork.MockNode>>
 
-    @After
-    fun stop() {
-        mockNet.stopNodes()
+        @BeforeClass
+        @JvmStatic
+        fun setUpClass() {
+            mockNet = InternalMockNetwork(
+                    cordappPackages = listOf("net.corda.core.flows", "net.corda.testing.contracts"),
+                    threadPerNode = true,
+                    networkParameters = testNetworkParameters(minimumPlatformVersion = 4)
+            )
+            nodes = (0..1).map {
+                mockNet.createNode(
+                        parameters = InternalMockNodeParameters(version = VersionInfo(4, "Blah", "Blah", "Blah"))
+                )
+            }
+        }
+
+        @AfterClass
+        @JvmStatic
+        fun stop() {
+            mockNet.stopNodes()
+        }
     }
 
     @Test

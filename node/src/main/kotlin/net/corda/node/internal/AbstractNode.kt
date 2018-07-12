@@ -175,7 +175,7 @@ abstract class AbstractNode(val configuration: NodeConfiguration,
     /** The implementation of the [CordaRPCOps] interface used by this node. */
     open fun makeRPCOps(flowStarter: FlowStarter, smm: StateMachineManager): CordaRPCOps {
 
-        val ops: CordaRPCOps = CordaRPCOpsImpl(services, smm, flowStarter, { shutdownExecutor.submit { stop() } })
+        val ops: CordaRPCOps = CordaRPCOpsImpl(services, smm, flowStarter) { shutdownExecutor.submit { stop() } }
         // Mind that order is relevant here.
         val proxies = listOf<(CordaRPCOps) -> CordaRPCOps>(::AuthenticatedRpcOpsProxy, { it -> ExceptionSerialisingRpcOpsProxy(it, true) })
         return proxies.fold(ops) { delegate, decorate -> decorate(delegate) }
@@ -230,35 +230,66 @@ abstract class AbstractNode(val configuration: NodeConfiguration,
             Emoji.renderIfSupported { Node.printWarning("This node is running in developer mode! ${Emoji.developer} This is not safe for production deployment.") }
         }
         log.info("Node starting up ...")
+        val initCertOne = System.currentTimeMillis()
         initCertificate()
+        val initCertTwo = System.currentTimeMillis()
+        println("*** TIME TO CREATE INIT CERTS: ${initCertTwo - initCertOne}")
+        val initAgentsStart = System.currentTimeMillis()
         initialiseJVMAgents()
+        val initAgentsStop = System.currentTimeMillis()
+        println("*** TIME TO INIT AGENTS: ${initAgentsStart - initAgentsStop}")
         val schemaService = NodeSchemaService(cordappLoader.cordappSchemas, configuration.notary != null)
         schemaService.mappedSchemasWarnings().forEach {
             val warning = it.toWarning()
             log.warn(warning)
             Node.printWarning(warning)
         }
+
+        val getIdentityStart = System.currentTimeMillis()
         val (identity, identityKeyPair) = obtainIdentity(notaryConfig = null)
+        val getIdentityStop = System.currentTimeMillis()
+        println("*** TIME TO OBTAIN IDENTITY: ${getIdentityStop - getIdentityStart}")
 
         // Wrapped in an atomic reference just to allow setting it before the closure below gets invoked.
         val identityServiceRef = AtomicReference<IdentityService>()
 
         // Do all of this in a database transaction so anything that might need a connection has one.
+        val startOne = System.currentTimeMillis()
         val database = initialiseDatabasePersistence(
                 schemaService,
                 { name -> identityServiceRef.get().wellKnownPartyFromX500Name(name) },
                 { party -> identityServiceRef.get().wellKnownPartyFromAnonymous(party) })
+        val finishOne = System.currentTimeMillis()
+        println("*** TIME TO CREATE CORDA PERSISTENCE: ${finishOne - startOne}")
+
+        val startIdentity = System.currentTimeMillis()
         val identityService = makeIdentityService(identity.certificate, database).also(identityServiceRef::set)
+        val stopIdentity = System.currentTimeMillis()
+        println("*** TIME TO CREATE IDENTITY SERVICE: ${stopIdentity - startIdentity}")
+
+        val startNMClient = System.currentTimeMillis()
         networkMapClient = configuration.networkServices?.let { NetworkMapClient(it.networkMapURL, identityService.trustRoot) }
+        val stopNMClient = System.currentTimeMillis()
+        println("*** TIME TO CREATE NETWORK MAP CLIENT: ${stopNMClient - startNMClient}")
+
+        val startNetworkParamsReading = System.currentTimeMillis()
         val networkParameteresReader = NetworkParametersReader(identityService.trustRoot, networkMapClient, configuration.baseDirectory)
+        val stopNetworkParamsReading = System.currentTimeMillis()
+        println("*** TIME TO READ NETWORK PARAMS: ${stopNetworkParamsReading - startNetworkParamsReading}")
+
         val networkParameters = networkParameteresReader.networkParameters
         platformVersionInfo = PlatformVersionInfo(networkParameters.minimumPlatformVersion)
         check(networkParameters.minimumPlatformVersion <= versionInfo.platformVersion) {
             "Node's platform version is lower than network's required minimumPlatformVersion"
         }
 
+        val startUberTransaction = System.currentTimeMillis()
         val (startedImpl, schedulerService) = database.transaction {
+            val startNetworkMapCache = System.currentTimeMillis()
             val networkMapCache = NetworkMapCacheImpl(PersistentNetworkMapCache(database, networkParameters.notaries).start(), identityService, database)
+            val stopNetworkMapCache = System.currentTimeMillis()
+            println("*** TIME TO CREATE NETWORK MAP CACHE: ${stopNetworkMapCache - startNetworkMapCache}")
+
             val (keyPairs, nodeInfo) = updateNodeInfo(networkMapCache, networkMapClient, identity, identityKeyPair)
             identityService.loadIdentities(nodeInfo.legalIdentitiesAndCerts)
             val metrics = MetricRegistry()
@@ -330,6 +361,8 @@ abstract class AbstractNode(val configuration: NodeConfiguration,
             startShell()
             Pair(StartedNodeImpl(this@AbstractNode, _services, nodeInfo, checkpointStorage, smm, attachments, network, database, rpcOps, flowStarter, notaryService), schedulerService)
         }
+        val stopUberTransaction = System.currentTimeMillis()
+        println("****** TIME TO PERFORM UBER TRANSACTION: ${stopUberTransaction - startUberTransaction}")
 
         networkMapUpdater = NetworkMapUpdater(services.networkMapCache,
                 NodeInfoWatcher(configuration.baseDirectory, getRxIoScheduler(), Duration.ofMillis(configuration.additionalNodeInfoPollingFrequencyMsec)),

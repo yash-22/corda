@@ -9,37 +9,40 @@ import net.corda.finance.issuedBy
 import net.corda.testing.core.*
 import net.corda.testing.node.MockNetwork
 import net.corda.testing.node.StartedMockNode
-import org.junit.After
-import org.junit.Before
+import org.junit.AfterClass
+import org.junit.BeforeClass
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class FinalityFlowTests {
+
     companion object {
         private val CHARLIE = TestIdentity(CHARLIE_NAME, 90).party
-    }
 
-    private lateinit var mockNet: MockNetwork
-    private lateinit var aliceNode: StartedMockNode
-    private lateinit var bobNode: StartedMockNode
-    private lateinit var alice: Party
-    private lateinit var bob: Party
-    private lateinit var notary: Party
+        private lateinit var mockNet: MockNetwork
+        private lateinit var aliceNode: StartedMockNode
+        private lateinit var bobNode: StartedMockNode
+        private lateinit var alice: Party
+        private lateinit var bob: Party
+        private lateinit var notary: Party
 
-    @Before
-    fun setup() {
-        mockNet = MockNetwork(cordappPackages = listOf("net.corda.finance.contracts.asset"))
-        aliceNode = mockNet.createPartyNode(ALICE_NAME)
-        bobNode = mockNet.createPartyNode(BOB_NAME)
-        alice = aliceNode.info.singleIdentity()
-        bob = bobNode.info.singleIdentity()
-        notary = mockNet.defaultNotaryIdentity
-    }
+        @BeforeClass
+        @JvmStatic
+        fun setup() {
+            mockNet = MockNetwork(cordappPackages = listOf("net.corda.finance.contracts.asset"))
+            aliceNode = mockNet.createPartyNode(ALICE_NAME)
+            bobNode = mockNet.createPartyNode(BOB_NAME)
+            alice = aliceNode.info.singleIdentity()
+            bob = bobNode.info.singleIdentity()
+            notary = mockNet.defaultNotaryIdentity
+        }
 
-    @After
-    fun tearDown() {
-        mockNet.stopNodes()
+        @AfterClass
+        @JvmStatic
+        fun tearDown() {
+            mockNet.stopNodes()
+        }
     }
 
     @Test

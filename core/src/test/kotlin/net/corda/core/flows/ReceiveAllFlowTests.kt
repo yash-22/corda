@@ -5,19 +5,34 @@ import net.corda.core.identity.Party
 import net.corda.core.utilities.UntrustworthyData
 import net.corda.core.utilities.getOrThrow
 import net.corda.core.utilities.unwrap
+import net.corda.node.internal.StartedNode
 import net.corda.testing.core.singleIdentity
 import net.corda.testing.node.internal.InternalMockNetwork
 import net.corda.testing.node.internal.startFlow
 import org.assertj.core.api.Assertions.assertThat
-import org.junit.After
+import org.junit.AfterClass
+import org.junit.BeforeClass
 import org.junit.Test
 
 class ReceiveMultipleFlowTests {
-    private val mockNet = InternalMockNetwork(emptyList())
-    private val nodes = (0..2).map { mockNet.createPartyNode() }
-    @After
-    fun stopNodes() {
-        mockNet.stopNodes()
+
+    companion object {
+        lateinit var mockNet: InternalMockNetwork
+        lateinit var nodes: List<StartedNode<InternalMockNetwork.MockNode>>
+
+        @BeforeClass
+        @JvmStatic
+        fun startNodes() {
+            mockNet = InternalMockNetwork(emptyList())
+            nodes = (0..2).map { mockNet.createPartyNode() }
+        }
+
+
+        @AfterClass
+        @JvmStatic
+        fun stopNodes() {
+            mockNet.stopNodes()
+        }
     }
 
     @Test

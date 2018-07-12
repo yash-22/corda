@@ -28,38 +28,52 @@ import net.corda.testing.core.singleIdentity
 import net.corda.testing.node.User
 import net.corda.testing.node.internal.*
 import net.corda.testing.node.internal.InternalMockNetwork.MockNode
-import org.junit.After
+import net.corda.testing.node.nukeDatabase
+import org.junit.AfterClass
 import org.junit.Before
+import org.junit.BeforeClass
 import org.junit.Test
 import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
+
 class ContractUpgradeFlowTest {
-    private lateinit var mockNet: InternalMockNetwork
-    private lateinit var aliceNode: StartedNode<MockNode>
-    private lateinit var bobNode: StartedNode<MockNode>
-    private lateinit var notary: Party
-    private lateinit var alice: Party
-    private lateinit var bob: Party
 
-    @Before
-    fun setup() {
-        mockNet = InternalMockNetwork(cordappPackages = listOf("net.corda.testing.contracts", "net.corda.finance.contracts.asset", "net.corda.core.flows"))
-        aliceNode = mockNet.createPartyNode(ALICE_NAME)
-        bobNode = mockNet.createPartyNode(BOB_NAME)
-        notary = mockNet.defaultNotaryIdentity
-        alice = aliceNode.info.singleIdentity()
-        bob = bobNode.info.singleIdentity()
+    companion object {
+        private lateinit var mockNet: InternalMockNetwork
+        private lateinit var aliceNode: StartedNode<MockNode>
+        private lateinit var bobNode: StartedNode<MockNode>
+        private lateinit var notary: Party
+        private lateinit var alice: Party
+        private lateinit var bob: Party
 
-        // Process registration
-        mockNet.runNetwork()
+        @BeforeClass
+        @JvmStatic
+        fun setup() {
+            mockNet = InternalMockNetwork(cordappPackages = listOf("net.corda.testing.contracts", "net.corda.finance.contracts.asset", "net.corda.core.flows"))
+            aliceNode = mockNet.createPartyNode(ALICE_NAME)
+            bobNode = mockNet.createPartyNode(BOB_NAME)
+            notary = mockNet.defaultNotaryIdentity
+            alice = aliceNode.info.singleIdentity()
+            bob = bobNode.info.singleIdentity()
+
+            // Process registration
+            mockNet.runNetwork()
+        }
+
+        @AfterClass
+        @JvmStatic
+        fun tearDown() {
+            mockNet.stopNodes()
+        }
     }
 
-    @After
-    fun tearDown() {
-        mockNet.stopNodes()
+    @Before
+    fun beforeTest() {
+        // Required for these tests as residual state from earlier tests affects later tests.
+        listOf(aliceNode, bobNode).forEach { nukeDatabase(it) }
     }
 
     @Test
