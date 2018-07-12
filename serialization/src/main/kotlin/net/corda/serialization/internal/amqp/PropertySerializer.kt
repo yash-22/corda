@@ -2,6 +2,7 @@ package net.corda.serialization.internal.amqp
 
 import net.corda.core.KeepForDJVM
 import net.corda.core.serialization.SerializationContext
+import net.corda.core.utilities.contextLogger
 import org.apache.qpid.proton.amqp.Binary
 import org.apache.qpid.proton.codec.Data
 import java.lang.reflect.Type
@@ -46,7 +47,15 @@ sealed class PropertySerializer(val name: String, val propertyReader: PropertyRe
     }
 
     companion object {
-        fun make(name: String, readMethod: PropertyReader, resolvedType: Type, factory: SerializerFactory): PropertySerializer {
+        private val logger = contextLogger()
+
+        fun make(
+                name: String,
+                readMethod: PropertyReader,
+                resolvedType: Type,
+                factory: SerializerFactory
+        ): PropertySerializer {
+            logger.info ("PropertySerializer - make - ${resolvedType.typeName}")
             return if (SerializerFactory.isPrimitive(resolvedType)) {
                 when (resolvedType) {
                     Char::class.java, Character::class.java -> AMQPCharPropertySerializer(name, readMethod)

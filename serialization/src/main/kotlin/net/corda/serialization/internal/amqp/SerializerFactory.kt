@@ -48,7 +48,7 @@ data class FactorySchemaAndDescriptor(val schemas: SerializationSchemas, val typ
 // TODO: need to support super classes as well as interfaces with our current code base... what's involved?  If we continue to ban, what is the impact?
 @KeepForDJVM
 @ThreadSafe
-open class SerializerFactory(
+open class SerializerFactory @JvmOverloads constructor (
         val whitelist: ClassWhitelist,
         val classCarpenter: ClassCarpenter,
         private val evolutionSerializerGetter: EvolutionSerializerGetterBase = EvolutionSerializerGetter(),
@@ -112,7 +112,8 @@ open class SerializerFactory(
     @Throws(NotSerializableException::class)
     fun get(actualClass: Class<*>?, declaredType: Type): AMQPSerializer<Any> {
         // can be useful to enable but will be *extremely* chatty if you do
-        logger.trace { "Get Serializer for $actualClass ${declaredType.typeName}" }
+        //logger.trace { "Get Serializer for $actualClass ${declaredType.typeName}" }
+        logger.info ("Get Serializer for $actualClass ${declaredType.typeName}")
 
         val declaredClass = declaredType.asClass() ?: throw NotSerializableException(
                 "Declared types of $declaredType are not supported.")
@@ -321,11 +322,13 @@ open class SerializerFactory(
     private fun processSchemaEntry(typeNotation: TypeNotation) = when (typeNotation) {
     // java.lang.Class (whether a class or interface)
         is CompositeType -> {
+            println ("processSchemaEntry - ctype - $typeNotation")
             logger.trace("typeNotation=${typeNotation.name} amqpType=CompositeType")
             processCompositeType(typeNotation)
         }
     // Collection / Map, possibly with generics
         is RestrictedType -> {
+            println ("processSchemaEntry - rtype - $typeNotation")
             logger.trace("typeNotation=${typeNotation.name} amqpType=RestrictedType")
             processRestrictedType(typeNotation)
         }
@@ -346,7 +349,8 @@ open class SerializerFactory(
             type: Type,
             declaredType: Type
     ): AMQPSerializer<Any> = serializersByType.computeIfAbsent(type) {
-        logger.debug { "class=${clazz.simpleName}, type=$type is a composite type" }
+        //logger.debug { "class=${clazz.simpleName}, type=$type is a composite type" }
+        logger.info("class=${clazz.simpleName}, type=$type is a composite type")
         if (clazz.isSynthetic) {
             // Explicitly ban synthetic classes, we have no way of recreating them when deserializing. This also
             // captures Lambda expressions and other anonymous functions

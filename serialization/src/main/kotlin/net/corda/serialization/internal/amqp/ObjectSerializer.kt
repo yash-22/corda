@@ -25,7 +25,12 @@ open class ObjectSerializer(val clazz: Type, factory: SerializerFactory) : AMQPS
         private val logger = contextLogger()
     }
 
+    init {
+        logger.info ("Create ObjectSerializer for ${type.typeName}")
+    }
+
     open val propertySerializers: PropertySerializers by lazy {
+        logger.info("PropertySerializers...")
         propertiesForSerialization(kotlinConstructor, clazz, factory)
     }
 

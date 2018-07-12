@@ -10,6 +10,7 @@ import net.corda.core.serialization.ConstructorForDeserialization
 import net.corda.core.serialization.CordaSerializable
 import net.corda.core.serialization.SerializationContext
 import org.apache.qpid.proton.codec.Data
+import org.slf4j.LoggerFactory
 import java.io.NotSerializableException
 import java.lang.reflect.*
 import java.lang.reflect.Field
@@ -22,6 +23,8 @@ import kotlin.reflect.full.primaryConstructor
 import kotlin.reflect.jvm.isAccessible
 import kotlin.reflect.jvm.javaConstructor
 import kotlin.reflect.jvm.javaType
+
+private val logger = LoggerFactory.getLogger("net.corda.serialization.internal.amqp")
 
 /**
  * Code for finding the constructor we will use for deserialization.
@@ -220,6 +223,8 @@ internal fun <T : Any> propertiesForSerializationFromConstructor(
         kotlinConstructor: KFunction<T>,
         type: Type,
         factory: SerializerFactory): List<PropertyAccessor> {
+    logger.info ("propertiesForSerialization - propertiesForSerializationFromConstructor")
+
     val clazz = (kotlinConstructor.returnType.classifier as KClass<*>).javaObjectType
 
     val classProperties = clazz.propertyDescriptors()
@@ -294,12 +299,16 @@ fun propertiesForSerializationFromSetters(
         properties: Map<String, PropertyDescriptor>,
         type: Type,
         factory: SerializerFactory): List<PropertyAccessor> {
+    logger.info ("propertiesForSerializationFromSetters - ${type.typeName}")
     return mutableListOf<PropertyAccessorGetterSetter>().apply {
         var idx = 0
 
         properties.forEach { property ->
+            logger.info ("property - ${property.key}")
             val getter: Method? = property.value.preferredGetter()
             val setter: Method? = property.value.setter
+
+            logger.info ("getter null = ${getter == null}, setter null = ${setter == null}")
 
             if (getter == null || setter == null) return@forEach
 

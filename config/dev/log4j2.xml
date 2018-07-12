@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Configuration status="info">
+<Configuration status="debug">
 
     <Properties>
         <Property name="log-path">${sys:log-path:-logs}</Property>
         <Property name="log-name">node-${hostName}</Property>
         <Property name="archive">${log-path}/archive</Property>
-        <Property name="consoleLogLevel">${sys:consoleLogLevel:-error}</Property>
-        <Property name="defaultLogLevel">${sys:defaultLogLevel:-info}</Property>
+        <Property name="consoleLogLevel">${sys:consoleLogLevel:-debug}</Property>
+        <Property name="defaultLogLevel">${sys:defaultLogLevel:-debug}</Property>
     </Properties>
 
     <ThresholdFilter level="trace"/>
