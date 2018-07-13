@@ -437,9 +437,11 @@ fun Data.writeReferencedObject(refObject: ReferencedObject) {
 }
 
 private fun resolveTypeVariables(actualType: Type, contextType: Type?): Type {
+    logger.info("resolveTypeVar $actualType $contextType")
     val resolvedType = if (contextType != null) TypeToken.of(contextType).resolveType(actualType).type else actualType
     // TODO: surely we check it is concrete at this point with no TypeVariables
     return if (resolvedType is TypeVariable<*>) {
+        logger.info ("It's this pants")
         val bounds = resolvedType.bounds
         return if (bounds.isEmpty()) {
             SerializerFactory.AnyType
@@ -447,6 +449,7 @@ private fun resolveTypeVariables(actualType: Type, contextType: Type?): Type {
             resolveTypeVariables(bounds[0], contextType)
         } else throw NotSerializableException("Got bounded type $actualType but only support single bound.")
     } else {
+        logger.info ("RAWW!!! ${TypeToken.of(resolvedType).rawType} ${resolvedType.typeName}")
         resolvedType
     }
 }

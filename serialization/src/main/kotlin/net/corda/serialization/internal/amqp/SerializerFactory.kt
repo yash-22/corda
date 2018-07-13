@@ -20,6 +20,7 @@ import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import javax.annotation.concurrent.ThreadSafe
+import kotlin.math.log
 
 @KeepForDJVM
 data class SerializationSchemas(val schema: Schema, val transforms: TransformsSchema)
@@ -120,6 +121,8 @@ open class SerializerFactory @JvmOverloads constructor (
 
         val actualType: Type = inferTypeVariables(actualClass, declaredClass, declaredType) ?: declaredType
 
+        logger.info ("Actual type is ${actualType.typeName}")
+
         val serializer = when {
         // Declared class may not be set to Collection, but actual class could be a collection.
         // In this case use of CollectionSerializer is perfectly appropriate.
@@ -151,6 +154,7 @@ open class SerializerFactory @JvmOverloads constructor (
                 }
             }
             else -> {
+                logger.info ("default case - $actualClass, $declaredClass ${actualType.typeName} ${declaredType.typeName}")
                 makeClassSerializer(actualClass ?: declaredClass, actualType, declaredType)
             }
         }
@@ -359,6 +363,7 @@ open class SerializerFactory @JvmOverloads constructor (
             AMQPPrimitiveSerializer(clazz)
         } else {
             findCustomSerializer(clazz, declaredType) ?: run {
+                logger.info("class=${clazz.simpleName}, type=$type let's make a serializer!!!")
                 if (onlyCustomSerializers) {
                     throw NotSerializableException("Only allowing custom serializers")
                 }
@@ -400,6 +405,8 @@ open class SerializerFactory @JvmOverloads constructor (
                     customSerializer as? AMQPSerializer<Any>
                 } else {
                     // Make a subclass serializer for the subclass and return that...
+                    logger.info ("action=\"Using custom serializer SUBCLASS\", class=${clazz.typeName}, " +
+                            "declaredType=${declaredType.typeName}")
                     CustomSerializer.SubClass(clazz, uncheckedCast(customSerializer))
                 }
             }

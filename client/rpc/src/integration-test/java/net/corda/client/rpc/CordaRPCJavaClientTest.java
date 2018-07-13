@@ -38,6 +38,7 @@ public class CordaRPCJavaClientTest extends NodeBasedTest {
     private List<String> perms = Arrays.asList(
             startFlow(CashPaymentFlow.class),
             startFlow(CashIssueFlow.class),
+            startFlow(ManyGenericsFlow.class),
             invokeRpc("nodeInfo"),
             invokeRpc("vaultQueryBy"),
             invokeRpc("vaultQueryByCriteria"));
@@ -84,5 +85,18 @@ public class CordaRPCJavaClientTest extends NodeBasedTest {
         System.out.print("Balance: " + balance + "\n");
 
         assertEquals(DOLLARS(123), balance, "matching");
+    }
+
+    @Test
+    public void wibble() {
+        login(rpcUser.getUsername(), rpcUser.getPassword());
+
+        try {
+        rpcProxy.startFlowDynamic(ManyGenericsFlow.class, new OtherGenericThings<>(Collections.singletonList("YES"))).getReturnValue().get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+
+
     }
 }

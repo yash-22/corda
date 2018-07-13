@@ -1,11 +1,13 @@
 package net.corda.java.rpc;
 
+import net.corda.client.rpc.CordaRPCClient;
 import net.corda.client.rpc.CordaRPCConnection;
 import net.corda.core.contracts.Amount;
 import net.corda.core.identity.CordaX500Name;
 import net.corda.core.identity.Party;
 import net.corda.core.messaging.CordaRPCOps;
 import net.corda.core.messaging.FlowHandle;
+import net.corda.core.utilities.NetworkHostAndPort;
 import net.corda.core.utilities.OpaqueBytes;
 import net.corda.finance.flows.AbstractCashFlow;
 import net.corda.finance.flows.CashIssueFlow;
@@ -110,4 +112,5 @@ public class StandaloneCordaRPCJavaClientTest {
 
         assertEquals(dollars123, balance, "matching");
     }
+
 }

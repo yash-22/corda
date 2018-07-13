@@ -1,8 +1,7 @@
 package net.corda.serialization.internal.amqp;
 
-import com.google.common.collect.ImmutableList;
+import net.corda.core.concurrent.CordaFuture;
 import net.corda.core.serialization.ClassWhitelist;
-import net.corda.core.serialization.SerializationWhitelist;
 import net.corda.core.serialization.SerializedBytes;
 import net.corda.serialization.internal.amqp.custom.BigDecimalSerializer;
 import net.corda.serialization.internal.amqp.testutils.TestSerializationContext;
@@ -12,12 +11,14 @@ import org.junit.Test;
 import java.io.NotSerializableException;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static net.corda.serialization.internal.amqp.testutils.AMQPTestUtilsKt.testDefaultFactory;
-import static net.corda.serialization.internal.amqp.testutils.AMQPTestUtilsKt.writeTestResource;
 import static org.jgroups.util.Util.assertEquals;
 import static org.jgroups.util.Util.assertNotNull;
+import static org.jgroups.util.Util.assertTrue;
 
 public class JavaGenericsTest {
     private static class Inner {
@@ -171,15 +172,12 @@ public class JavaGenericsTest {
         public Integer getA() {
             return this.a;
         }
-
         public BigDecimal getB() {
             return this.b;
         }
-
         public List<String> getC() {
             return this.c;
         }
-
         public List<InnerPotato> getD() {
             return this.d;
         }
@@ -197,7 +195,6 @@ public class JavaGenericsTest {
         public String getA() {
             return this.a;
         }
-
         public String getB() {
             return this.b;
         }
@@ -269,6 +266,35 @@ public class JavaGenericsTest {
                 TestSerializationContext.testSerializationContext);
     }
 
+    Object localSerialize(List<?> l, SerializerFactory f1, SerializerFactory f2) throws NotSerializableException {
+        SerializedBytes<?> bytes = new SerializationOutput(f1)
+                .serialize(l, TestSerializationContext.testSerializationContext);
+
+        return new DeserializationInput(f2).deserialize(
+                bytes,
+                Object.class,
+                TestSerializationContext.testSerializationContext);
+    }
+
+    @Test
+    public void anotherPotatoTest() throws NotSerializableException {
+        SerializerFactory factory1 = testDefaultFactory();
+        SerializerFactory factory2 = testDefaultFactory();
+
+        factory1.register(BigDecimalSerializer.INSTANCE);
+        factory2.register(BigDecimalSerializer.INSTANCE);
+
+        List<Potato> potatoList = new ArrayList<>();
+        potatoList.add(makePotato());
+        potatoList.add(makePotato());
+        potatoList.add(makePotato());
+
+        Object blob = localSerialize(potatoList, factory1, factory2);
+        List<Potato> potatoList2 = (List<Potato>)blob;
+
+        assertEquals(potatoList.get(0).a, potatoList2.get(0).a);
+    }
+
     static class ListList<T> {
         private List<List<T>> listList;
 
@@ -331,4 +357,137 @@ public class JavaGenericsTest {
         assertEquals("3", l_p.get(0).d.get(1).a);
         assertEquals("4", l_p.get(0).d.get(1).b);
     }
+
+    static class Apple<A, B, C> {
+        private A a;
+        private B b;
+        private C c;
+        private List<A> d;
+
+        Apple(A a, B b, C c, List<A> d) {
+            this.a = a;
+            this.b = b;
+            this.c = c;
+            this.d = d;
+        }
+
+        Apple() {
+
+        }
+
+        public A getA() {
+            return a;
+        }
+
+        public B getB() {
+            return b;
+        }
+
+        public C getC() {
+            return c;
+        }
+
+        public List<A> getD() {
+            return d;
+        }
+
+        public List<?> getList() {
+            return d;
+        }
+
+        public void setA(A a) {
+            this.a = a;
+        }
+
+        public void setB(B b) {
+            this.b = b;
+        }
+
+        public void setC(C c) {
+            this.c = c;
+        }
+
+        public void setD(List<A> d) {
+            this.d = d;
+        }
+    }
+
+    private void setAppleList(List<?> l, Apple a) {
+        a.setD(l);
+    }
+
+    private SerializedBytes<?> forceWildcardSerializeApple(Apple<?, ?, ?> a) throws NotSerializableException {
+        return (new SerializationOutput(testDefaultFactory()))
+                .serialize(a, TestSerializationContext.testSerializationContext);
+    }
+
+    private <T> Apple<?, ?, ?> makeApple(T val) {
+        @SuppressWarnings("unchecked")
+        Apple<T, InnerPotato, List<Integer>> innerA = new Apple(
+                val,
+                new InnerPotato("inner", "potato"),
+                Collections.singletonList(1),
+                Collections.singletonList("hello"));
+
+        List<Apple> appleList1 = new ArrayList<>();
+        appleList1.add(innerA);
+
+        Apple<String, InnerPotato, List<Apple>> a = new Apple();
+
+        a.setA((String)val);
+        a.setB(new InnerPotato("inner", "potato"));
+        a.setC(appleList1);
+        a.setD(Arrays.asList("1", "2", "3"));
+
+        return a;
+    }
+
+    @Test
+    public void testWildApple() throws NotSerializableException {
+        Apple<?, ?, ?> a = makeApple("wibble");
+
+        SerializedBytes<?> blobby = forceWildcardSerializeApple(a);
+
+        Apple<?, ?, ?> a2 = new DeserializationInput(testDefaultFactory()).deserialize(
+                blobby,
+                Apple.class,
+                TestSerializationContext.testSerializationContext);
+
+        SerializedBytes<?> blobby2 = forceWildcardSerializeApple(a2);
+
+        Apple<?, ?, ?> a3 = new DeserializationInput(testDefaultFactory()).deserialize(
+                blobby2,
+                Apple.class,
+                TestSerializationContext.testSerializationContext);
+
+        assertEquals("wibble", a3.getA());
+        assertEquals("inner", ((InnerPotato)a3.getB()).getA());
+        assertEquals("potato", ((InnerPotato)a3.getB()).getB());
+    }
+
+    @Test
+    public void testApple() throws NotSerializableException {
+        Apple a = makeApple("dribble");
+
+        SerializerFactory factory1 = testDefaultFactory();
+
+        SerializedBytes<?> bytes = new SerializationOutput(factory1)
+                .serialize(a, TestSerializationContext.testSerializationContext);
+
+        System.out.println ("\n\n-------------------\n\n");
+
+        @SuppressWarnings("unchecked")
+        Apple<String, InnerPotato, List<Apple>> newApple = new DeserializationInput(testDefaultFactory()).deserialize(
+                bytes,
+                Apple.class,
+                TestSerializationContext.testSerializationContext);
+
+        assertEquals(1, newApple.c.size());
+    }
+
+
+
+
+
+
 }

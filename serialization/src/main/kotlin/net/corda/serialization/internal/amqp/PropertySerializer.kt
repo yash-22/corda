@@ -77,6 +77,14 @@ sealed class PropertySerializer(val name: String, val propertyReader: PropertyRe
             resolvedType: Type,
             private val lazyTypeSerializer: () -> AMQPSerializer<*>) : PropertySerializer(name, readMethod, resolvedType) {
         // This is lazy so we don't get an infinite loop when a method returns an instance of the class.
+        companion object {
+            private val logger = contextLogger()
+        }
+
+        init {
+            logger.info ("DescribedTypePropertySerializer - $name - ${resolvedType.typeName}")
+        }
+
         private val typeSerializer: AMQPSerializer<*> by lazy { lazyTypeSerializer() }
 
         override fun writeClassInfo(output: SerializationOutput) = ifThrowsAppend({ nameForDebug }) {
