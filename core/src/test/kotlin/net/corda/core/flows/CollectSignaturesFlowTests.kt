@@ -13,13 +13,13 @@ import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.utilities.getOrThrow
 import net.corda.node.internal.StartedNode
 import net.corda.testing.contracts.DummyContract
-import net.corda.testing.core.*
+import net.corda.testing.core.TestIdentity
+import net.corda.testing.core.singleIdentity
 import net.corda.testing.internal.rigorousMock
+import net.corda.testing.node.MockNetworkTest
 import net.corda.testing.node.MockServices
 import net.corda.testing.node.internal.InternalMockNetwork
-import net.corda.testing.node.internal.InternalMockNetwork.MockNode
 import net.corda.testing.node.internal.startFlow
-import org.junit.AfterClass
 import org.junit.BeforeClass
 import org.junit.Test
 import kotlin.test.assertFailsWith
@@ -28,11 +28,11 @@ class CollectSignaturesFlowTests {
 
     companion object {
         val miniCorp = TestIdentity(CordaX500Name("MiniCorp", "London", "GB"))
+        private val mockNet: InternalMockNetwork by lazy { MockNetworkTest.mockNet }
+        private val aliceNode: StartedNode<InternalMockNetwork.MockNode> by lazy { MockNetworkTest.aliceNode }
+        private val bobNode: StartedNode<InternalMockNetwork.MockNode> by lazy { MockNetworkTest.bobNode }
+        private val charlieNode: StartedNode<InternalMockNetwork.MockNode> by lazy { MockNetworkTest.charlieNode }
 
-        lateinit var mockNet: InternalMockNetwork
-        lateinit var aliceNode: StartedNode<MockNode>
-        lateinit var bobNode: StartedNode<MockNode>
-        lateinit var charlieNode: StartedNode<MockNode>
         lateinit var alice: Party
         lateinit var bob: Party
         lateinit var charlie: Party
@@ -41,20 +41,10 @@ class CollectSignaturesFlowTests {
         @BeforeClass
         @JvmStatic
         fun setUpClass() {
-            mockNet = InternalMockNetwork(cordappPackages = listOf("net.corda.testing.contracts", "net.corda.core.flows"))
-            aliceNode = mockNet.createPartyNode(ALICE_NAME)
-            bobNode = mockNet.createPartyNode(BOB_NAME)
-            charlieNode = mockNet.createPartyNode(CHARLIE_NAME)
             alice = aliceNode.info.singleIdentity()
             bob = bobNode.info.singleIdentity()
             charlie = charlieNode.info.singleIdentity()
             notary = mockNet.defaultNotaryIdentity
-        }
-
-        @AfterClass
-        @JvmStatic
-        fun stop() {
-            mockNet.stopNodes()
         }
     }
 

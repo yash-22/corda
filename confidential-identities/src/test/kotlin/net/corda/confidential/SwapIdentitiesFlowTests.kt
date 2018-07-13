@@ -1,28 +1,32 @@
 package net.corda.confidential
 
-import net.corda.core.identity.*
+import net.corda.core.identity.AbstractParty
+import net.corda.core.identity.AnonymousParty
+import net.corda.core.identity.Party
+import net.corda.core.identity.PartyAndCertificate
 import net.corda.core.utilities.getOrThrow
-import net.corda.testing.core.*
+import net.corda.node.internal.StartedNode
+import net.corda.testing.core.BOB_NAME
+import net.corda.testing.core.singleIdentity
+import net.corda.testing.core.singleIdentityAndCert
+import net.corda.testing.node.MockNetworkTest
 import net.corda.testing.node.internal.InternalMockNetwork
 import net.corda.testing.node.internal.startFlow
-import org.junit.Before
 import org.junit.Test
 import kotlin.test.*
 
 class SwapIdentitiesFlowTests {
-    private lateinit var mockNet: InternalMockNetwork
 
-    @Before
-    fun setup() {
-        // We run this in parallel threads to help catch any race conditions that may exist.
-        mockNet = InternalMockNetwork(emptyList(), networkSendManuallyPumped = false, threadPerNode = true)
+    companion object {
+        private val mockNet: InternalMockNetwork by lazy { MockNetworkTest.mockNet }
+        private val aliceNode: StartedNode<InternalMockNetwork.MockNode> by lazy { MockNetworkTest.aliceNode }
+        private val bobNode: StartedNode<InternalMockNetwork.MockNode> by lazy { MockNetworkTest.bobNode }
+        private val charlieNode: StartedNode<InternalMockNetwork.MockNode> by lazy { MockNetworkTest.charlieNode }
     }
 
     @Test
     fun `issue key`() {
         // Set up values we'll need
-        val aliceNode = mockNet.createPartyNode(ALICE_NAME)
-        val bobNode = mockNet.createPartyNode(BOB_NAME)
         val alice = aliceNode.info.singleIdentity()
         val bob = bobNode.services.myInfo.singleIdentity()
 
@@ -47,8 +51,6 @@ class SwapIdentitiesFlowTests {
         assertTrue { bobAnonymousIdentity.owningKey in bobNode.services.keyManagementService.keys }
         assertFalse { aliceAnonymousIdentity.owningKey in bobNode.services.keyManagementService.keys }
         assertFalse { bobAnonymousIdentity.owningKey in aliceNode.services.keyManagementService.keys }
-
-        mockNet.stopNodes()
     }
 
     /**
@@ -57,9 +59,6 @@ class SwapIdentitiesFlowTests {
     @Test
     fun `verifies identity name`() {
         // Set up values we'll need
-        val aliceNode = mockNet.createPartyNode(ALICE_NAME)
-        val bobNode = mockNet.createPartyNode(BOB_NAME)
-        val charlieNode = mockNet.createPartyNode(CHARLIE_NAME)
         val bob: Party = bobNode.services.myInfo.singleIdentity()
         val notBob = charlieNode.database.transaction {
             charlieNode.services.keyManagementService.freshKeyAndCert(charlieNode.services.myInfo.singleIdentityAndCert(), false)
@@ -69,8 +68,6 @@ class SwapIdentitiesFlowTests {
         assertFailsWith<SwapIdentitiesException>("Certificate subject must match counterparty's well known identity.") {
             SwapIdentitiesFlow.validateAndRegisterIdentity(aliceNode.services.identityService, bob, notBob, signature.withoutKey())
         }
-
-        mockNet.stopNodes()
     }
 
     /**
@@ -79,8 +76,6 @@ class SwapIdentitiesFlowTests {
     @Test
     fun `verifies signature`() {
         // Set up values we'll need
-        val aliceNode = mockNet.createPartyNode(ALICE_NAME)
-        val bobNode = mockNet.createPartyNode(BOB_NAME)
         val alice: PartyAndCertificate = aliceNode.info.singleIdentityAndCert()
         val bob: PartyAndCertificate = bobNode.info.singleIdentityAndCert()
         // Check that the right name but wrong key is rejected
@@ -107,7 +102,5 @@ class SwapIdentitiesFlowTests {
                 SwapIdentitiesFlow.validateAndRegisterIdentity(aliceNode.services.identityService, bob.party, anonymousBob, signature.withoutKey())
             }
         }
-
-        mockNet.stopNodes()
     }
 }

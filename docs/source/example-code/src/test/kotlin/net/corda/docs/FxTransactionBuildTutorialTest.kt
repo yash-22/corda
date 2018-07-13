@@ -4,34 +4,25 @@ import net.corda.core.identity.Party
 import net.corda.core.toFuture
 import net.corda.core.utilities.OpaqueBytes
 import net.corda.core.utilities.getOrThrow
-import net.corda.finance.DOLLARS
-import net.corda.finance.GBP
-import net.corda.finance.POUNDS
-import net.corda.finance.USD
+import net.corda.finance.*
 import net.corda.finance.contracts.getCashBalances
 import net.corda.finance.flows.CashIssueFlow
-import net.corda.finance.issuedBy
+import net.corda.node.internal.StartedNode
 import net.corda.testing.core.singleIdentity
-import net.corda.testing.node.MockNetwork
-import net.corda.testing.node.StartedMockNode
+import net.corda.testing.node.MockNetworkTest
+import net.corda.testing.node.internal.InternalMockNetwork
+import net.corda.testing.node.internal.startFlow
 import org.junit.After
-import org.junit.Before
 import org.junit.Test
 import kotlin.test.assertEquals
 
 class FxTransactionBuildTutorialTest {
-    private lateinit var mockNet: MockNetwork
-    private lateinit var nodeA: StartedMockNode
-    private lateinit var nodeB: StartedMockNode
-    private lateinit var notary: Party
 
-    @Before
-    fun setup() {
-        mockNet = MockNetwork(threadPerNode = true, cordappPackages = listOf("net.corda.finance"))
-        nodeA = mockNet.createPartyNode()
-        nodeB = mockNet.createPartyNode()
-        nodeB.registerInitiatedFlow(ForeignExchangeRemoteFlow::class.java)
-        notary = mockNet.defaultNotaryIdentity
+    companion object {
+        private val mockNet: InternalMockNetwork by lazy { MockNetworkTest.mockNet }
+        private val aliceNode: StartedNode<InternalMockNetwork.MockNode> by lazy { MockNetworkTest.aliceNode }
+        private val bobNode: StartedNode<InternalMockNetwork.MockNode> by lazy { MockNetworkTest.bobNode }
+        private val notary: Party = mockNet.defaultNotaryIdentity
     }
 
     @After
@@ -41,37 +32,37 @@ class FxTransactionBuildTutorialTest {
 
     @Test
     fun `Run ForeignExchangeFlow to completion`() {
-        // Use NodeA as issuer and create some dollars and wait for the flow to stop
-        nodeA.startFlow(CashIssueFlow(DOLLARS(1000),
+        // Use aliceNode as issuer and create some dollars and wait for the flow to stop
+        aliceNode.services.startFlow(CashIssueFlow(DOLLARS(1000),
                 OpaqueBytes.of(0x01),
-                notary)).getOrThrow()
+                notary)).resultFuture.getOrThrow()
         printBalances()
 
-        // Using NodeB as Issuer create some pounds and wait for the flow to stop
-        nodeB.startFlow(CashIssueFlow(POUNDS(1000),
+        // Using bobNode as Issuer create some pounds and wait for the flow to stop
+        bobNode.services.startFlow(CashIssueFlow(POUNDS(1000),
                 OpaqueBytes.of(0x01),
-                notary)).getOrThrow()
+                notary)).resultFuture.getOrThrow()
         printBalances()
 
         // Setup some futures on the vaults to await the arrival of the exchanged funds at both nodes
-        val nodeAVaultUpdate = nodeA.services.vaultService.updates.toFuture()
-        val nodeBVaultUpdate = nodeB.services.vaultService.updates.toFuture()
+        val aliceNodeVaultUpdate = aliceNode.services.vaultService.updates.toFuture()
+        val bobNodeVaultUpdate = bobNode.services.vaultService.updates.toFuture()
 
         // Now run the actual Fx exchange and wait for the flow to finish
-        nodeA.startFlow(ForeignExchangeFlow("trade1",
-                POUNDS(100).issuedBy(nodeB.info.singleIdentity().ref(0x01)),
-                DOLLARS(200).issuedBy(nodeA.info.singleIdentity().ref(0x01)),
-                nodeB.info.singleIdentity(),
-                weAreBaseCurrencySeller = false)).getOrThrow()
+        aliceNode.services.startFlow(ForeignExchangeFlow("trade1",
+                POUNDS(100).issuedBy(bobNode.info.singleIdentity().ref(0x01)),
+                DOLLARS(200).issuedBy(aliceNode.info.singleIdentity().ref(0x01)),
+                bobNode.info.singleIdentity(),
+                weAreBaseCurrencySeller = false)).resultFuture.getOrThrow()
         // wait for the flow to finish and the vault updates to be done
         // Get the balances when the vault updates
-        nodeAVaultUpdate.get()
-        val balancesA = nodeA.transaction {
-            nodeA.services.getCashBalances()
+        aliceNodeVaultUpdate.get()
+        val balancesA = aliceNode.database.transaction {
+            aliceNode.services.getCashBalances()
         }
-        nodeBVaultUpdate.get()
-        val balancesB = nodeB.transaction {
-            nodeB.services.getCashBalances()
+        bobNodeVaultUpdate.get()
+        val balancesB = bobNode.database.transaction {
+            bobNode.services.getCashBalances()
         }
 
         println("BalanceA\n$balancesA")
@@ -85,11 +76,11 @@ class FxTransactionBuildTutorialTest {
 
     private fun printBalances() {
         // Print out the balances
-        nodeA.transaction {
-            println("BalanceA\n" + nodeA.services.getCashBalances())
+        aliceNode.database.transaction {
+            println("BalanceA\n" + aliceNode.services.getCashBalances())
         }
-        nodeB.transaction {
-            println("BalanceB\n" + nodeB.services.getCashBalances())
+        bobNode.database.transaction {
+            println("BalanceB\n" + bobNode.services.getCashBalances())
         }
     }
 }

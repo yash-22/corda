@@ -1,35 +1,58 @@
 package net.corda.testing.node
 
 import net.corda.node.internal.StartedNode
+import net.corda.testing.core.ALICE_NAME
+import net.corda.testing.core.BOB_NAME
+import net.corda.testing.core.CHARLIE_NAME
 import net.corda.testing.node.internal.InternalMockNetwork
 import java.util.*
 
-fun nukeDatabase(node: StartedNode<InternalMockNetwork.MockNode>) {
-    node.database.transaction {
-        val session = node.database.createSession()
-        val statement = session.createStatement()
+class MockNetworkFactory
 
-        statement.execute("SET REFERENTIAL_INTEGRITY FALSE")
 
-        val availableTables = HashSet<String>()
+object MockNetworkTest {
 
-        val repeats = generateSequence { "?" }.take(tablesToNuke.size).joinToString(",")
-        val sql = "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES AS TABLES WHERE TABLES.TABLE_NAME IN ($repeats)"
-        session.prepareStatement(sql).use { preparedStatement ->
-            var offset = 0
-            tablesToNuke.forEach { preparedStatement.setString(++offset, it) }
-            val results = preparedStatement.executeQuery()
-            while (results.next()) {
-                availableTables.add(results.getString(1))
+    @JvmStatic
+    val mockNet: InternalMockNetwork = InternalMockNetwork(
+            cordappPackages = listOf("net.corda.finance.contracts.asset", "net.corda.core.flows", "net.corda.testing.contracts", "net.corda.docs"),
+            networkSendManuallyPumped = false,
+            threadPerNode = true
+    )
+
+    @JvmStatic
+    val aliceNode: StartedNode<InternalMockNetwork.MockNode> = mockNet.createPartyNode(ALICE_NAME)
+    @JvmStatic
+    val bobNode: StartedNode<InternalMockNetwork.MockNode> = mockNet.createPartyNode(BOB_NAME)
+    @JvmStatic
+    val charlieNode: StartedNode<InternalMockNetwork.MockNode> = mockNet.createPartyNode(CHARLIE_NAME)
+
+    fun nukeDatabase(node: StartedNode<InternalMockNetwork.MockNode>) {
+        node.database.transaction {
+            val session = node.database.createSession()
+            val statement = session.createStatement()
+
+            statement.execute("SET REFERENTIAL_INTEGRITY FALSE")
+
+            val availableTables = HashSet<String>()
+
+            val repeats = generateSequence { "?" }.take(tablesToNuke.size).joinToString(",")
+            val sql = "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES AS TABLES WHERE TABLES.TABLE_NAME IN ($repeats)"
+            session.prepareStatement(sql).use { preparedStatement ->
+                var offset = 0
+                tablesToNuke.forEach { preparedStatement.setString(++offset, it) }
+                val results = preparedStatement.executeQuery()
+                while (results.next()) {
+                    availableTables.add(results.getString(1))
+                }
+                results.close()
             }
-            results.close()
-        }
 
-        availableTables.forEach {
-            statement.executeUpdate("TRUNCATE TABLE $it;")
-        }
+            availableTables.forEach {
+                statement.executeUpdate("TRUNCATE TABLE $it;")
+            }
 
-        statement.execute("SET REFERENTIAL_INTEGRITY TRUE")
+            statement.execute("SET REFERENTIAL_INTEGRITY TRUE")
+        }
     }
 }
 

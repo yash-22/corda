@@ -7,32 +7,19 @@ import net.corda.core.utilities.getOrThrow
 import net.corda.core.utilities.unwrap
 import net.corda.node.internal.StartedNode
 import net.corda.testing.core.singleIdentity
+import net.corda.testing.node.MockNetworkTest
 import net.corda.testing.node.internal.InternalMockNetwork
 import net.corda.testing.node.internal.startFlow
 import org.assertj.core.api.Assertions.assertThat
-import org.junit.AfterClass
-import org.junit.BeforeClass
 import org.junit.Test
 
 class ReceiveMultipleFlowTests {
 
     companion object {
-        lateinit var mockNet: InternalMockNetwork
-        lateinit var nodes: List<StartedNode<InternalMockNetwork.MockNode>>
-
-        @BeforeClass
-        @JvmStatic
-        fun startNodes() {
-            mockNet = InternalMockNetwork(emptyList())
-            nodes = (0..2).map { mockNet.createPartyNode() }
-        }
-
-
-        @AfterClass
-        @JvmStatic
-        fun stopNodes() {
-            mockNet.stopNodes()
-        }
+        private val mockNet: InternalMockNetwork by lazy { MockNetworkTest.mockNet }
+        private val aliceNode: StartedNode<InternalMockNetwork.MockNode> by lazy { MockNetworkTest.aliceNode }
+        private val bobNode: StartedNode<InternalMockNetwork.MockNode> by lazy { MockNetworkTest.bobNode }
+        private val charlieNode: StartedNode<InternalMockNetwork.MockNode> by lazy { MockNetworkTest.charlieNode }
     }
 
     @Test
@@ -40,7 +27,7 @@ class ReceiveMultipleFlowTests {
         val answer = 10.0
         val message = "Hello Ivan"
 
-        val counterParty = nodes[1].info.singleIdentity()
+        val counterParty = bobNode.info.singleIdentity()
 
         val initiatingFlow = @InitiatingFlow object : FlowLogic<Any>() {
 
@@ -51,7 +38,7 @@ class ReceiveMultipleFlowTests {
             }
         }
 
-        nodes[1].registerInitiatedFlow(initiatingFlow::class) { session ->
+        bobNode.registerInitiatedFlow(initiatingFlow::class) { session ->
             object : FlowLogic<Unit>() {
                 @Suspendable
                 override fun call() {
@@ -64,7 +51,7 @@ class ReceiveMultipleFlowTests {
             } as FlowLogic<Unit>
         }
 
-        val flow = nodes[0].services.startFlow(initiatingFlow)
+        val flow = aliceNode.services.startFlow(initiatingFlow)
         mockNet.runNetwork()
         val receivedAnswer = flow.resultFuture.getOrThrow()
         assertThat(receivedAnswer).isEqualTo(answer)
@@ -73,10 +60,10 @@ class ReceiveMultipleFlowTests {
     @Test
     fun `receive all messages in parallel using map style`() {
         val doubleValue = 5.0
-        nodes[1].registerAnswer(AlgorithmDefinition::class, doubleValue)
+        bobNode.registerAnswer(AlgorithmDefinition::class, doubleValue)
         val stringValue = "Thriller"
-        nodes[2].registerAnswer(AlgorithmDefinition::class, stringValue)
-        val flow = nodes[0].services.startFlow(ParallelAlgorithmMap(nodes[1].info.singleIdentity(), nodes[2].info.singleIdentity()))
+        charlieNode.registerAnswer(AlgorithmDefinition::class, stringValue)
+        val flow = aliceNode.services.startFlow(ParallelAlgorithmMap(bobNode.info.singleIdentity(), charlieNode.info.singleIdentity()))
         mockNet.runNetwork()
         val result = flow.resultFuture.getOrThrow()
         assertThat(result).isEqualTo(doubleValue * stringValue.length)
@@ -85,10 +72,10 @@ class ReceiveMultipleFlowTests {
     @Test
     fun `receive all messages in parallel using list style`() {
         val value1 = 5.0
-        nodes[1].registerAnswer(ParallelAlgorithmList::class, value1)
+        bobNode.registerAnswer(ParallelAlgorithmList::class, value1)
         val value2 = 6.0
-        nodes[2].registerAnswer(ParallelAlgorithmList::class, value2)
-        val flow = nodes[0].services.startFlow(ParallelAlgorithmList(nodes[1].info.singleIdentity(), nodes[2].info.singleIdentity()))
+        charlieNode.registerAnswer(ParallelAlgorithmList::class, value2)
+        val flow = aliceNode.services.startFlow(ParallelAlgorithmList(bobNode.info.singleIdentity(), charlieNode.info.singleIdentity()))
         mockNet.runNetwork()
         val data = flow.resultFuture.getOrThrow()
         assertThat(data[0]).isEqualTo(value1)

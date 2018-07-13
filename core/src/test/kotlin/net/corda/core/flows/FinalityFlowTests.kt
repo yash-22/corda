@@ -6,10 +6,13 @@ import net.corda.core.utilities.getOrThrow
 import net.corda.finance.POUNDS
 import net.corda.finance.contracts.asset.Cash
 import net.corda.finance.issuedBy
-import net.corda.testing.core.*
-import net.corda.testing.node.MockNetwork
-import net.corda.testing.node.StartedMockNode
-import org.junit.AfterClass
+import net.corda.node.internal.StartedNode
+import net.corda.testing.core.CHARLIE_NAME
+import net.corda.testing.core.TestIdentity
+import net.corda.testing.core.singleIdentity
+import net.corda.testing.node.MockNetworkTest
+import net.corda.testing.node.internal.InternalMockNetwork
+import net.corda.testing.node.internal.startFlow
 import org.junit.BeforeClass
 import org.junit.Test
 import kotlin.test.assertEquals
@@ -19,10 +22,10 @@ class FinalityFlowTests {
 
     companion object {
         private val CHARLIE = TestIdentity(CHARLIE_NAME, 90).party
+        private val mockNet: InternalMockNetwork by lazy { MockNetworkTest.mockNet }
+        private val aliceNode: StartedNode<InternalMockNetwork.MockNode> by lazy { MockNetworkTest.aliceNode }
+        private val bobNode: StartedNode<InternalMockNetwork.MockNode> by lazy { MockNetworkTest.bobNode }
 
-        private lateinit var mockNet: MockNetwork
-        private lateinit var aliceNode: StartedMockNode
-        private lateinit var bobNode: StartedMockNode
         private lateinit var alice: Party
         private lateinit var bob: Party
         private lateinit var notary: Party
@@ -30,18 +33,9 @@ class FinalityFlowTests {
         @BeforeClass
         @JvmStatic
         fun setup() {
-            mockNet = MockNetwork(cordappPackages = listOf("net.corda.finance.contracts.asset"))
-            aliceNode = mockNet.createPartyNode(ALICE_NAME)
-            bobNode = mockNet.createPartyNode(BOB_NAME)
             alice = aliceNode.info.singleIdentity()
             bob = bobNode.info.singleIdentity()
             notary = mockNet.defaultNotaryIdentity
-        }
-
-        @AfterClass
-        @JvmStatic
-        fun tearDown() {
-            mockNet.stopNodes()
         }
     }
 
@@ -51,11 +45,11 @@ class FinalityFlowTests {
         val builder = TransactionBuilder(notary)
         Cash().generateIssue(builder, amount, bob, notary)
         val stx = aliceNode.services.signInitialTransaction(builder)
-        val flow = aliceNode.startFlow(FinalityFlow(stx))
+        val flow = aliceNode.services.startFlow(FinalityFlow(stx))
         mockNet.runNetwork()
-        val notarisedTx = flow.getOrThrow()
+        val notarisedTx = flow.resultFuture.getOrThrow()
         notarisedTx.verifyRequiredSignatures()
-        val transactionSeenByB = bobNode.transaction {
+        val transactionSeenByB = bobNode.database.transaction {
             bobNode.services.validatedTransactions.getTransaction(notarisedTx.id)
         }
         assertEquals(notarisedTx, transactionSeenByB)
@@ -68,10 +62,10 @@ class FinalityFlowTests {
         val builder = TransactionBuilder(notary)
         Cash().generateIssue(builder, amount, fakeIdentity, notary)
         val stx = aliceNode.services.signInitialTransaction(builder)
-        val flow = aliceNode.startFlow(FinalityFlow(stx))
+        val flow = aliceNode.services.startFlow(FinalityFlow(stx))
         mockNet.runNetwork()
         assertFailsWith<IllegalArgumentException> {
-            flow.getOrThrow()
+            flow.resultFuture.getOrThrow()
         }
     }
 }

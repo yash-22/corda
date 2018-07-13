@@ -19,15 +19,11 @@ import net.corda.core.utilities.getOrThrow
 import net.corda.node.internal.StartedNode
 import net.corda.node.services.statemachine.StateMachineManager
 import net.corda.testing.contracts.DummyContract
-import net.corda.testing.core.ALICE_NAME
-import net.corda.testing.core.BOB_NAME
 import net.corda.testing.core.dummyCommand
 import net.corda.testing.core.singleIdentity
+import net.corda.testing.node.MockNetworkTest
 import net.corda.testing.node.internal.InternalMockNetwork
-import net.corda.testing.node.internal.InternalMockNetwork.MockNode
-import net.corda.testing.node.internal.InternalMockNodeParameters
 import net.corda.testing.node.internal.startFlow
-import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -37,16 +33,20 @@ import kotlin.test.assertEquals
 
 class ScheduledFlowTests {
     companion object {
-        const val PAGE_SIZE = 20
         val SORTING = Sort(listOf(Sort.SortColumn(SortAttribute.Standard(Sort.CommonStateAttribute.STATE_REF_TXN_ID), Sort.Direction.DESC)))
+        private val mockNet: InternalMockNetwork by lazy { MockNetworkTest.mockNet }
+        private val aliceNode: StartedNode<InternalMockNetwork.MockNode> by lazy { MockNetworkTest.aliceNode }
+        private val bobNode: StartedNode<InternalMockNetwork.MockNode> by lazy { MockNetworkTest.bobNode }
+        private val notary: Party = mockNet.defaultNotaryIdentity
+        private val alice: Party = aliceNode.info.singleIdentity()
+        private val bob: Party = bobNode.info.singleIdentity()
     }
 
-    private lateinit var mockNet: InternalMockNetwork
-    private lateinit var aliceNode: StartedNode<MockNode>
-    private lateinit var bobNode: StartedNode<MockNode>
-    private lateinit var notary: Party
-    private lateinit var alice: Party
-    private lateinit var bob: Party
+    @Before
+    fun beforeTest() {
+        // Required for these tests as residual state from earlier tests affects later tests.
+        listOf(aliceNode, bobNode).forEach { MockNetworkTest.nukeDatabase(it) }
+    }
 
     data class ScheduledState(val creationTime: Instant,
                               val source: Party,
@@ -99,21 +99,6 @@ class ScheduledFlowTests {
         }
     }
 
-    @Before
-    fun setup() {
-        mockNet = InternalMockNetwork(cordappPackages = listOf("net.corda.testing.contracts"), threadPerNode = true)
-        aliceNode = mockNet.createNode(InternalMockNodeParameters(legalName = ALICE_NAME))
-        bobNode = mockNet.createNode(InternalMockNodeParameters(legalName = BOB_NAME))
-        notary = mockNet.defaultNotaryIdentity
-        alice = aliceNode.info.singleIdentity()
-        bob = bobNode.info.singleIdentity()
-    }
-
-    @After
-    fun cleanUp() {
-        mockNet.stopNodes()
-    }
-
     @Test
     fun `create and run scheduled flow then wait for result`() {
         var countScheduledFlows = 0
@@ -139,7 +124,7 @@ class ScheduledFlowTests {
 
     @Test
     fun `run a whole batch of scheduled flows`() {
-        val N = 99
+        val N = 20 // Was previously 99. Do we really need to run 99 flows???
         val futures = mutableListOf<CordaFuture<*>>()
         for (i in 0 until N) {
             futures.add(aliceNode.services.startFlow(InsertInitialStateFlow(bob, notary)).resultFuture)

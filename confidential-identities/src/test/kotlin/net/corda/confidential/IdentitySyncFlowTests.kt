@@ -15,14 +15,10 @@ import net.corda.finance.contracts.asset.Cash
 import net.corda.finance.flows.CashIssueAndPaymentFlow
 import net.corda.finance.flows.CashPaymentFlow
 import net.corda.node.internal.StartedNode
-import net.corda.testing.core.ALICE_NAME
-import net.corda.testing.core.BOB_NAME
-import net.corda.testing.core.CHARLIE_NAME
 import net.corda.testing.core.singleIdentity
+import net.corda.testing.node.MockNetworkTest
 import net.corda.testing.node.internal.InternalMockNetwork
 import net.corda.testing.node.internal.startFlow
-import org.junit.AfterClass
-import org.junit.BeforeClass
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -31,30 +27,10 @@ import kotlin.test.assertNull
 class IdentitySyncFlowTests {
 
     companion object {
-        private lateinit var mockNet: InternalMockNetwork
-        private lateinit var aliceNode: StartedNode<InternalMockNetwork.MockNode>
-        private lateinit var bobNode: StartedNode<InternalMockNetwork.MockNode>
-        private lateinit var charlieNode: StartedNode<InternalMockNetwork.MockNode>
-
-        @BeforeClass
-        @JvmStatic
-        fun setup() {
-            mockNet = InternalMockNetwork(
-                    cordappPackages = listOf("net.corda.finance.contracts.asset"),
-                    networkSendManuallyPumped = false,
-                    threadPerNode = true
-            )
-            aliceNode = mockNet.createPartyNode(ALICE_NAME)
-            bobNode = mockNet.createPartyNode(BOB_NAME)
-            charlieNode = mockNet.createPartyNode(CHARLIE_NAME)
-        }
-
-        @AfterClass
-        @JvmStatic
-        fun tearDown() {
-            mockNet.stopNodes()
-        }
-
+        private val mockNet: InternalMockNetwork by lazy { MockNetworkTest.mockNet }
+        private val aliceNode: StartedNode<InternalMockNetwork.MockNode> by lazy { MockNetworkTest.aliceNode }
+        private val bobNode: StartedNode<InternalMockNetwork.MockNode> by lazy { MockNetworkTest.bobNode }
+        private val charlieNode: StartedNode<InternalMockNetwork.MockNode> by lazy { MockNetworkTest.charlieNode }
     }
 
     @Test
