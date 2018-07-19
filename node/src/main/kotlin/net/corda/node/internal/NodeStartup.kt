@@ -1,6 +1,5 @@
 package net.corda.node.internal
 
-import com.jcabi.manifests.Manifests
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigException
 import com.typesafe.config.ConfigRenderOptions
@@ -8,15 +7,11 @@ import io.netty.channel.unix.Errors
 import joptsimple.OptionParser
 import joptsimple.util.PathConverter
 import net.corda.core.crypto.Crypto
-import net.corda.core.internal.Emoji
+import net.corda.core.internal.*
 import net.corda.core.internal.concurrent.thenMatch
-import net.corda.core.internal.createDirectories
-import net.corda.core.internal.div
 import net.corda.core.internal.errors.AddressBindingException
-import net.corda.core.internal.exists
-import net.corda.core.internal.location
-import net.corda.core.internal.randomOrNull
 import net.corda.core.utilities.Try
+import net.corda.core.utilities.getOrThrow
 import net.corda.core.utilities.loggerFor
 import net.corda.node.*
 import net.corda.node.internal.cordapp.MultipleCordappsForFlowException
@@ -48,6 +43,10 @@ import java.net.InetAddress
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.*
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
+import java.util.jar.Attributes
+import java.util.jar.Manifest
 import kotlin.system.exitProcess
 
 /** This class is responsible for starting a Node from command line arguments. */
@@ -82,69 +81,66 @@ open class NodeStartup(val args: Array<String>) {
         } else {
             NodeArgsParser().parseOrExit(*args)
         }
+
         // We do the single node check before we initialise logging so that in case of a double-node start it
         // doesn't mess with the running node's logs.
-        enforceSingleNodeIsRunning(cmdlineOptions.baseDirectory)
+        logElapsedTime("enforceSingleNodeIsRunning") {
+            enforceSingleNodeIsRunning(cmdlineOptions.baseDirectory)
+        }
 
-        initLogging(cmdlineOptions)
-        // Register all cryptography [Provider]s.
-        // Required to install our [SecureRandom] before e.g., UUID asks for one.
-        // This needs to go after initLogging(netty clashes with our logging).
-        Crypto.registerProviders()
+        logElapsedTime("initLogging") {
+            initLogging(cmdlineOptions)
+        }
 
         val versionInfo = getVersionInfo()
 
         if (cmdlineOptions.isVersion) {
             println("${versionInfo.vendor} ${versionInfo.releaseVersion}")
-            println("Revision ${versionInfo.revision}")
             println("Platform Version ${versionInfo.platformVersion}")
+            println("Revision ${versionInfo.revision}")
             return true
         }
 
-        drawBanner(versionInfo)
-        Node.printBasicNodeInfo(LOGS_CAN_BE_FOUND_IN_STRING, System.getProperty("log-path"))
-        val conf = try {
-            val (rawConfig, conf0Result) = loadConfigFile(cmdlineOptions)
-            if (cmdlineOptions.devMode) {
-                println("Config:\n${rawConfig.root().render(ConfigRenderOptions.defaults())}")
-            }
-            val conf0 = conf0Result.getOrThrow()
-            if (cmdlineOptions.bootstrapRaftCluster) {
-                if (conf0 is NodeConfigurationImpl) {
-                    println("Bootstrapping raft cluster (starting up as seed node).")
-                    // Ignore the configured clusterAddresses to make the node bootstrap a cluster instead of joining.
-                    conf0.copy(notary = conf0.notary?.copy(raft = conf0.notary?.raft?.copy(clusterAddresses = emptyList())))
-                } else {
-                    println("bootstrap-raft-notaries flag not recognized, exiting...")
-                    return false
-                }
-            } else {
-                conf0
-            }
-        } catch (e: UnknownConfigurationKeysException) {
-            logger.error(e.message)
-            return false
-        } catch (e: ConfigException.IO) {
-            println("""
-                Unable to load the node config file from '${cmdlineOptions.configFile}'.
+        val startupExecutor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors())
 
-                Try experimenting with the --base-directory flag to change which directory the node
-                is looking in, or use the --config-file flag to specify it explicitly.
-            """.trimIndent())
-            return false
-        } catch (e: Exception) {
-            logger.error("Unexpected error whilst reading node configuration", e)
-            return false
+        println("After startupExecutor: ${System.currentTimeMillis() - startTime} msec")
+
+        val loggerInitFuture = startupExecutor.submit {
+            logElapsedTime("loggerFor") {
+                loggerFor<NodeStartup>()
+            }
         }
-        val errors = conf.validate()
-        if (errors.isNotEmpty()) {
-            logger.error("Invalid node configuration. Errors where:${System.lineSeparator()}${errors.joinToString(System.lineSeparator())}")
-            return false
+
+        val registerProvidersFuture = startupExecutor.submit {
+            // Register all cryptography [Provider]s.
+            // Required to install our [SecureRandom] before e.g., UUID asks for one.
+            // This needs to go after initLogging(netty clashes with our logging).
+            logElapsedTime("registerProviders") {
+                Crypto.registerProviders()
+            }
+        }
+
+        val processConfigFuture = startupExecutor.submit(Callable {
+            logElapsedTime("processConfig") {
+                processConfig(cmdlineOptions)
+            }
+        })
+
+        loggerInitFuture.getOrThrow()
+        registerProvidersFuture.getOrThrow()
+        val conf = processConfigFuture.getOrThrow() ?: return false
+
+        println("After conf: ${System.currentTimeMillis() - startTime} msec")
+
+        logElapsedTime("drawBanner") {
+            drawBanner(versionInfo)
+        }
+        logElapsedTime("printBasicNodeInfo") {
+            Node.printBasicNodeInfo(LOGS_CAN_BE_FOUND_IN_STRING, System.getProperty("log-path"))
         }
 
         try {
             banJavaSerialisation(conf)
-            preNetworkRegistration(conf)
             if (cmdlineOptions.nodeRegistrationOption != null) {
                 // Null checks for [compatibilityZoneURL], [rootTruststorePath] and [rootTruststorePassword] has been done in [CmdLineOptions.loadConfig]
                 registerWithNetwork(conf, versionInfo, cmdlineOptions.nodeRegistrationOption)
@@ -201,6 +197,50 @@ open class NodeStartup(val args: Array<String>) {
         return true
     }
 
+    private fun processConfig(cmdlineOptions: CmdLineOptions): NodeConfiguration? {
+        val conf = try {
+            val (rawConfig, conf0Result) = loadConfigFile(cmdlineOptions)
+            if (cmdlineOptions.devMode) {
+                println("Config:\n${rawConfig.root().render(ConfigRenderOptions.defaults())}")
+            }
+            val conf0 = conf0Result.getOrThrow()
+            if (cmdlineOptions.bootstrapRaftCluster) {
+                if (conf0 is NodeConfigurationImpl) {
+                    println("Bootstrapping raft cluster (starting up as seed node).")
+                    // Ignore the configured clusterAddresses to make the node bootstrap a cluster instead of joining.
+                    conf0.copy(notary = conf0.notary?.copy(raft = conf0.notary?.raft?.copy(clusterAddresses = emptyList())))
+                } else {
+                    println("bootstrap-raft-notaries flag not recognized, exiting...")
+                    return null
+                }
+            } else {
+                conf0
+            }
+        } catch (e: UnknownConfigurationKeysException) {
+            logger.error(e.message)
+            return null
+        } catch (e: ConfigException.IO) {
+            println("""
+                Unable to load the node config file from '${cmdlineOptions.configFile}'.
+
+                Try experimenting with the --base-directory flag to change which directory the node
+                is looking in, or use the --config-file flag to specify it explicitly.
+            """.trimIndent())
+            return null
+        } catch (e: Exception) {
+            logger.error("Unexpected error whilst reading node configuration", e)
+            return null
+        }
+
+        val errors = conf.validate()
+        if (errors.isNotEmpty()) {
+            logger.error("Invalid node configuration. Errors where:${System.lineSeparator()}${errors.joinToString(System.lineSeparator())}")
+            return null
+        }
+
+        return conf
+    }
+
     private fun checkRegistrationMode(): Boolean {
         // Parse the command line args just to get the base directory. The base directory is needed to determine
         // if the node registration marker file exists, _before_ we call NodeArgsParser.parse().
@@ -243,8 +283,6 @@ open class NodeStartup(val args: Array<String>) {
             logger.warn("Could not delete the marker file that was created for `--initial-registration`.", e)
         }
     }
-
-    protected open fun preNetworkRegistration(conf: NodeConfiguration) = Unit
 
     protected open fun createNode(conf: NodeConfiguration, versionInfo: VersionInfo): Node = Node(conf, versionInfo)
 
@@ -399,15 +437,24 @@ open class NodeStartup(val args: Array<String>) {
     }
 
     protected open fun getVersionInfo(): VersionInfo {
-        // Manifest properties are only available if running from the corda jar
-        fun manifestValue(name: String): String? = if (Manifests.exists(name)) Manifests.read(name) else null
+        val manifestAttrs = Thread.currentThread()
+                .contextClassLoader
+                .getResources("META-INF/MANIFEST.MF")
+                .asSequence()
+                .map { it.openStream().use { Manifest(it).mainAttributes } }
+                .firstOrNull { Attributes.Name("Corda-Platform-Version") in it }
 
-        return VersionInfo(
-                manifestValue("Corda-Platform-Version")?.toInt() ?: 1,
-                manifestValue("Corda-Release-Version") ?: "Unknown",
-                manifestValue("Corda-Revision") ?: "Unknown",
-                manifestValue("Corda-Vendor") ?: "Unknown"
-        )
+        return if (manifestAttrs == null) {
+            logger.error("Manifest for Corda node not found")
+            VersionInfo(1, "Unknown", "Unknown", "Unknown")
+        } else {
+            VersionInfo(
+                    manifestAttrs.getValue("Corda-Platform-Version").toInt(),
+                    manifestAttrs.getValue("Corda-Release-Version"),
+                    manifestAttrs.getValue("Corda-Revision"),
+                    manifestAttrs.getValue("Corda-Vendor")
+            )
+        }
     }
 
     private fun enforceSingleNodeIsRunning(baseDirectory: Path) {
