@@ -98,7 +98,9 @@ class TwoPartyTradeFlowTests(private val anonymous: Boolean) {
 
     @After
     fun after() {
-        mockNet.stopNodes()
+        if (::mockNet.isInitialized) {
+            mockNet.stopNodes()
+        }
         LogHelper.reset("platform.trade", "core.contract.TransactionGroup", "recordingmap")
     }
 
@@ -147,11 +149,11 @@ class TwoPartyTradeFlowTests(private val anonymous: Boolean) {
             bobNode.dispose()
 
             aliceNode.database.transaction {
-                assertThat(aliceNode.checkpointStorage.checkpoints()).isEmpty()
+                assertThat(aliceNode.internals.checkpointStorage.checkpoints()).isEmpty()
             }
             aliceNode.internals.manuallyCloseDB()
             bobNode.database.transaction {
-                assertThat(bobNode.checkpointStorage.checkpoints()).isEmpty()
+                assertThat(bobNode.internals.checkpointStorage.checkpoints()).isEmpty()
             }
             bobNode.internals.manuallyCloseDB()
         }
@@ -205,11 +207,11 @@ class TwoPartyTradeFlowTests(private val anonymous: Boolean) {
             bobNode.dispose()
 
             aliceNode.database.transaction {
-                assertThat(aliceNode.checkpointStorage.checkpoints()).isEmpty()
+                assertThat(aliceNode.internals.checkpointStorage.checkpoints()).isEmpty()
             }
             aliceNode.internals.manuallyCloseDB()
             bobNode.database.transaction {
-                assertThat(bobNode.checkpointStorage.checkpoints()).isEmpty()
+                assertThat(bobNode.internals.checkpointStorage.checkpoints()).isEmpty()
             }
             bobNode.internals.manuallyCloseDB()
         }
@@ -261,7 +263,7 @@ class TwoPartyTradeFlowTests(private val anonymous: Boolean) {
 
             // OK, now Bob has sent the partial transaction back to Alice and is waiting for Alice's signature.
             bobNode.database.transaction {
-                assertThat(bobNode.checkpointStorage.checkpoints()).hasSize(1)
+                assertThat(bobNode.internals.checkpointStorage.checkpoints()).hasSize(1)
             }
 
             val storage = bobNode.services.validatedTransactions
@@ -294,10 +296,10 @@ class TwoPartyTradeFlowTests(private val anonymous: Boolean) {
 
             assertThat(bobNode.smm.findStateMachines(Buyer::class.java)).isEmpty()
             bobNode.database.transaction {
-                assertThat(bobNode.checkpointStorage.checkpoints()).isEmpty()
+                assertThat(bobNode.internals.checkpointStorage.checkpoints()).isEmpty()
             }
             aliceNode.database.transaction {
-                assertThat(aliceNode.checkpointStorage.checkpoints()).isEmpty()
+                assertThat(aliceNode.internals.checkpointStorage.checkpoints()).isEmpty()
             }
 
             bobNode.database.transaction {
@@ -319,8 +321,8 @@ class TwoPartyTradeFlowTests(private val anonymous: Boolean) {
         return mockNet.createNode(InternalMockNodeParameters(legalName = name), nodeFactory = { args ->
             object : InternalMockNetwork.MockNode(args) {
                 // That constructs a recording tx storage
-                override fun makeTransactionStorage(database: CordaPersistence, transactionCacheSizeBytes: Long): WritableTransactionStorage {
-                    return RecordingTransactionStorage(database, super.makeTransactionStorage(database, transactionCacheSizeBytes))
+                override fun makeTransactionStorage(transactionCacheSizeBytes: Long): WritableTransactionStorage {
+                    return RecordingTransactionStorage(database, super.makeTransactionStorage(transactionCacheSizeBytes))
                 }
             }
         })
